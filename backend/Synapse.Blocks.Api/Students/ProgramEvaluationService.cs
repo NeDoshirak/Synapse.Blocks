@@ -31,21 +31,22 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
         var validationErrors = runner.Validate(program);
         if (validationErrors.Count != 0) throw new ProgramEvaluationValidationException(validationErrors);
 
-        var levelIndex = sharedCase.Levels.OrderBy(level => level.Order).ToList().FindIndex(level => level.LevelVersionId == levelVersionId);
-        if (levelIndex < 0) return null;
-        var levelSnapshot = sharedCase.Levels.Single(level => level.LevelVersionId == levelVersionId).LevelVersion;
-        var definition = JsonSerializer.Deserialize<LevelDefinition>(levelSnapshot.DefinitionJson, JsonOptions)
-            ?? throw new InvalidOperationException("Level definition snapshot is invalid.");
-
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtext({0}))", [attemptId.ToString()], cancellationToken);
         var attempt = await attempts.FindAttemptAsync(sharedCase.Id, attemptId, continuationToken, cancellationToken);
         if (attempt is null) return null;
 
-        var orderedLevels = sharedCase.Levels.OrderBy(level => level.Order).ToArray();
+        var orderedVersionIds = JsonSerializer.Deserialize<List<Guid>>(attempt.LevelVersionIdsJson) ?? [];
+        var levelIndex = orderedVersionIds.FindIndex(id => id == levelVersionId);
+        if (levelIndex < 0) return null;
+        var levelSnapshot = await db.LevelVersions.SingleOrDefaultAsync(item => item.Id == levelVersionId, cancellationToken);
+        if (levelSnapshot is null) return null;
+        var definition = JsonSerializer.Deserialize<LevelDefinition>(levelSnapshot.DefinitionJson, JsonOptions)
+            ?? throw new InvalidOperationException("Level definition snapshot is invalid.");
+        var orderedLevels = orderedVersionIds.ToArray();
         var completedIds = attempt.LevelResults.Where(result => result.Completed).Select(result => result.LevelVersionId).ToHashSet();
         var completedLevelCount = 0;
-        while (completedLevelCount < orderedLevels.Length && completedIds.Contains(orderedLevels[completedLevelCount].LevelVersionId))
+        while (completedLevelCount < orderedLevels.Length && completedIds.Contains(orderedLevels[completedLevelCount]))
             completedLevelCount++;
         if (levelIndex > completedLevelCount) throw new AttemptProgressConflictException();
 
@@ -72,11 +73,13 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        if (passed) completedIds.Add(levelVersionId);
+
         var publicResults = runResults
             .Where(result => definition.Tests.Any(test => test.Id == result.TestId && !test.Hidden))
             .Select(result => new PublicTestResultDto(result.TestId, result.Name, result.Passed, result.Input, result.Expected, result.Actual, result.Error))
             .ToArray();
-        return new LevelEvaluationDto(passed, publicResults);
+        return new LevelEvaluationDto(passed, publicResults, orderedVersionIds.Where(completedIds.Contains).ToArray(), attempt.Status == "Completed");
     }
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();

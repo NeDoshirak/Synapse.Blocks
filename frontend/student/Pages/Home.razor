@@ -4,6 +4,7 @@
 @inject LevelStore LevelStore
 @inject ProgressStore ProgressStore
 @inject SolutionStore SolutionStore
+@inject StudentCaseStore StudentCaseStore
 @inject BlockProgramRunner Runner
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -17,20 +18,28 @@
 else if (ActiveLevel is null)
 {
     <section class="empty-state">
+        @if (_caseMode)
+        {
+            <h1>Набор недоступен</h1>
+            <p>@_caseError</p>
+        }
+        else
+        {
         <h1>Уровней пока нет</h1>
         <p>Попросите разработчика добавить первое задание в кампанию.</p>
         <a class="primary-link" href="">Вернуться в город</a>
+        }
     </section>
 }
 else
 {
     <section class="game-toolbar @(IsSandbox ? "sandbox-toolbar" : "child-toolbar")">
         <div>
-            <small>@(IsSandbox ? "ПЕСОЧНИЦА / УРОВЕНЬ" : "ТЕКУЩАЯ ОПЕРАЦИЯ")</small>
+                <small>@(IsSandbox ? "ПЕСОЧНИЦА / УРОВЕНЬ" : _caseMode ? "УЧЕБНЫЙ НАБОР / УРОВЕНЬ" : "ТЕКУЩАЯ ОПЕРАЦИЯ")</small>
             <select value="@ActiveLevel.Id" @onchange="SelectLevel">
                 @foreach (var level in _levels)
                 {
-                    <option value="@level.Id">@(_completed.Contains(level.Id) ? "✓" : "○") @level.Order.ToString("00") · @level.Title</option>
+                    <option value="@level.Id" disabled="@(!CanSelectLevel(level))">@(_completed.Contains(level.Id) ? "✓" : "○") @level.Order.ToString("00") · @level.Title</option>
                 }
             </select>
         </div>
@@ -505,7 +514,7 @@ else
                 <div class="complete-stats"><span><b>@_results.Count</b> тестов пройдено</span><span><b>@_program.Nodes.Count</b> блоков в решении</span></div>
                 <div class="complete-actions">
                     <button type="button" class="secondary" @onclick="CloseSuccess">Посмотреть схему</button>
-                    <button type="button" class="primary" @onclick="GoToNextLevel">@(HasNextLevel ? "Следующий уровень →" : "Вернуться в город →")</button>
+                    <button type="button" class="primary" @onclick="GoToNextLevel">@(HasNextLevel ? "Следующий уровень →" : _caseMode ? "Завершить набор →" : "Вернуться в город →")</button>
                 </div>
             </section>
         </div>
@@ -544,6 +553,10 @@ else
     private const double CanvasLeadY = 1200;
     [SupplyParameterFromQuery(Name = "level")]
     public Guid? RequestedLevel { get; set; }
+    [SupplyParameterFromQuery(Name = "case")]
+    public string? CaseToken { get; set; }
+    [SupplyParameterFromQuery(Name = "attempt")]
+    public Guid? RequestedAttempt { get; set; }
 
     // Текущая схема существует независимо от уровня: уровень задаёт только данные и тесты.
     private readonly BlockProgram _program = new();
@@ -563,6 +576,11 @@ else
     private BlockKind? _dragTemplate;
     private double _zoom = 1;
     private bool _loading = true;
+    private bool _caseMode;
+    private string _caseError = "";
+    private Guid? _caseAttemptId;
+    private string? _caseToken;
+    private Dictionary<Guid, Guid> _caseLevelVersionIds = [];
     private bool _showSuccess;
     private bool _running;
     private BlockKind? _helpKind;
@@ -625,6 +643,12 @@ else
         ? level.IntroSteps[index]
         : null;
     private bool HasNextLevel => ActiveLevel is not null && _levels.IndexOf(ActiveLevel) < _levels.Count - 1;
+    private bool CanSelectLevel(LevelDefinition level)
+    {
+        if (!_caseMode) return true;
+        var next = _levels.FirstOrDefault(candidate => !_completed.Contains(candidate.Id));
+        return next?.Id == level.Id;
+    }
     private bool CanStepProgram => ActiveLevel is not null && ActiveLevel.Tests.Count > 0 && _program.Nodes.Count > 0 && !_running && !_stepSessionFinished;
     private string StepButtonLabel => _stepSessionFinished
         ? (string.IsNullOrWhiteSpace(_debugFinalError) ? "Тест завершён" : "Ошибка в блоке")
@@ -649,13 +673,35 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _levels = await LevelStore.LoadGameAsync();
-        if (IsSandbox)
-            _levels = _levels.Select(CloneForSandbox).ToList();
-        _completed = await ProgressStore.LoadAsync();
-        _activeLevelId = RequestedLevel is Guid requested && _levels.Any(level => level.Id == requested)
-            ? requested
-            : _levels.FirstOrDefault(level => !_completed.Contains(level.Id))?.Id ?? _levels.FirstOrDefault()?.Id;
+        _caseMode = !string.IsNullOrWhiteSpace(CaseToken) && RequestedAttempt is not null;
+        if (_caseMode)
+        {
+            _caseToken = CaseToken;
+            try
+            {
+                var attempt = await StudentCaseStore.ResumeAsync(_caseToken!);
+                if (attempt is null || attempt.AttemptId != RequestedAttempt) throw new InvalidOperationException("Попытка не найдена. Откройте ссылку QR и начните заново.");
+                _caseAttemptId = attempt.AttemptId;
+                _levels = attempt.Levels.OrderBy(item => item.Order).Select(item => item.Definition).ToList();
+                _caseLevelVersionIds = attempt.Levels.ToDictionary(item => item.Definition.Id, item => item.LevelVersionId);
+                _completed = _levels.Where(level => attempt.CompletedLevelVersionIds.Contains(_caseLevelVersionIds[level.Id])).Select(level => level.Id).ToHashSet();
+                _activeLevelId = _levels.FirstOrDefault(level => !_completed.Contains(level.Id))?.Id ?? _levels.LastOrDefault()?.Id;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+            {
+                _caseError = ex.Message;
+                _levels = [];
+            }
+        }
+        else
+        {
+            _levels = await LevelStore.LoadGameAsync();
+            if (IsSandbox) _levels = _levels.Select(CloneForSandbox).ToList();
+            _completed = await ProgressStore.LoadAsync();
+            _activeLevelId = RequestedLevel is Guid requested && _levels.Any(level => level.Id == requested)
+                ? requested
+                : _levels.FirstOrDefault(level => !_completed.Contains(level.Id))?.Id ?? _levels.FirstOrDefault()?.Id;
+        }
         _loading = false;
         await LoadSolutionAsync();
         if (!IsSandbox)
@@ -748,6 +794,11 @@ else
     {
         if (Guid.TryParse(args.Value?.ToString(), out var id))
         {
+            if (_caseMode)
+            {
+                var requestedLevel = _levels.FirstOrDefault(level => level.Id == id);
+                if (requestedLevel is null || !CanSelectLevel(requestedLevel)) return;
+            }
             _activeLevelId = id;
             ClearProgram();
             await LoadSolutionAsync();
@@ -760,7 +811,9 @@ else
     private async Task LoadSolutionAsync()
     {
         if (IsSandbox || ActiveLevel is null) return;
-        var saved = await SolutionStore.LoadAsync(ActiveLevel.Id);
+        var saved = _caseMode && _caseAttemptId is Guid attemptId && _caseLevelVersionIds.TryGetValue(ActiveLevel.Id, out var versionId)
+            ? await SolutionStore.LoadCaseAsync(attemptId, versionId)
+            : await SolutionStore.LoadAsync(ActiveLevel.Id);
         if (saved is null) return;
         _program.Nodes.AddRange(saved.Nodes);
         _program.Connections.AddRange(saved.Connections);
@@ -772,7 +825,10 @@ else
     {
         await Task.Delay(250);
         if (generation != _saveGeneration || IsSandbox || ActiveLevel is null || _loading) return;
-        await SolutionStore.SaveAsync(ActiveLevel.Id, _program);
+        if (_caseMode && _caseAttemptId is Guid attemptId && _caseLevelVersionIds.TryGetValue(ActiveLevel.Id, out var versionId))
+            await SolutionStore.SaveCaseAsync(attemptId, versionId, _program);
+        else
+            await SolutionStore.SaveAsync(ActiveLevel.Id, _program);
     }
 
     private void AddNode(BlockKind kind, double? x = null, double? y = null)
@@ -1349,9 +1405,45 @@ else
             : $"Прогон завершён: пройдено {_results.Count(result => result.Passed)} из {_results.Count}";
         StateHasChanged();
 
-        if (_results.Count > 0 && _results.All(result => result.Passed))
+        if (_caseMode)
         {
-            if (!IsSandbox)
+            try
+            {
+                if (_caseToken is null || _caseAttemptId is not Guid attemptId || !_caseLevelVersionIds.TryGetValue(ActiveLevel.Id, out var versionId))
+                    throw new InvalidOperationException("Не удалось определить текущий уровень набора.");
+                var evaluation = await StudentCaseStore.EvaluateAsync(_caseToken, attemptId, versionId, _program);
+                if (evaluation.Passed)
+                {
+                    foreach (var level in _levels)
+                        if (evaluation.CompletedLevelVersionIds.Contains(_caseLevelVersionIds[level.Id])) _completed.Add(level.Id);
+                }
+                else if (_results.All(result => result.Passed))
+                {
+                    _debugFinalError = "Дополнительные проверки не пройдены.";
+                    _debugMessage = "Программа прошла открытые тесты, но для зачёта нужны дополнительные проверки.";
+                }
+                StateHasChanged();
+                if (!evaluation.Passed) return;
+            }
+            catch (HttpRequestException)
+            {
+                _debugFinalError = "Результат не сохранён. Проверьте соединение и отправьте программу ещё раз.";
+                _debugMessage = "Сервер не подтвердил прохождение. Уровень остался незачтённым.";
+                StateHasChanged();
+                return;
+            }
+            catch (InvalidOperationException ex)
+            {
+                _debugFinalError = ex.Message;
+                _debugMessage = "Уровень остался незачтённым.";
+                StateHasChanged();
+                return;
+            }
+        }
+
+        if (_caseMode || _results.Count > 0 && _results.All(result => result.Passed))
+        {
+            if (!IsSandbox && !_caseMode)
             {
                 _completed.Add(ActiveLevel.Id);
                 await ProgressStore.CompleteAsync(ActiveLevel.Id);
@@ -1403,6 +1495,11 @@ else
             _showSuccess = false;
             if (!IsSandbox)
                 ShowLevelIntro();
+            return;
+        }
+        if (_caseMode && _caseToken is not null)
+        {
+            Navigation.NavigateTo($"/case/{Uri.EscapeDataString(_caseToken)}");
             return;
         }
         Navigation.NavigateTo(Navigation.BaseUri);

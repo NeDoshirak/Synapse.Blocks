@@ -1,9 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Contracts.Students;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Data.Entities;
+using Synapse.Blocks.Api.Contracts.Cases;
+using Synapse.Blocks.Models;
 
 namespace Synapse.Blocks.Api.Students;
 
@@ -34,10 +37,12 @@ public sealed class AttemptService(AppDbContext db)
     {
         var participant = await FindParticipantAsync(caseId, continuationToken, cancellationToken);
         if (participant is null) return null;
-        var attempt = new Attempt { CaseId = caseId, ParticipantId = participant.Id };
+        var levelVersionIds = await db.CaseLevels.AsNoTracking().Where(item => item.CaseId == caseId).OrderBy(item => item.Order).Select(item => item.LevelVersionId).ToListAsync(cancellationToken);
+        if (levelVersionIds.Count == 0) return null;
+        var attempt = new Attempt { CaseId = caseId, ParticipantId = participant.Id, LevelVersionIdsJson = JsonSerializer.Serialize(levelVersionIds) };
         db.Attempts.Add(attempt);
         await db.SaveChangesAsync(cancellationToken);
-        return ToDto(attempt, 0);
+        return await ToDtoAsync(attempt, 0, cancellationToken);
     }
 
     public async Task<AttemptDto?> GetCurrentAsync(Guid caseId, string? continuationToken, CancellationToken cancellationToken = default)
@@ -47,7 +52,7 @@ public sealed class AttemptService(AppDbContext db)
         var attempt = await db.Attempts.AsNoTracking().Include(item => item.LevelResults)
             .Where(item => item.CaseId == caseId && item.ParticipantId == participant.Id)
             .OrderByDescending(item => item.StartedAt).FirstOrDefaultAsync(cancellationToken);
-        return attempt is null ? null : ToDto(attempt, attempt.LevelResults.Count(result => result.Completed));
+        return attempt is null ? null : await ToDtoAsync(attempt, attempt.LevelResults.Count(result => result.Completed), cancellationToken);
     }
 
     internal async Task<Attempt?> FindAttemptAsync(Guid caseId, Guid attemptId, string? continuationToken, CancellationToken cancellationToken)
@@ -69,5 +74,29 @@ public sealed class AttemptService(AppDbContext db)
 
     internal static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private static string CreateToken() => Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
-    internal static AttemptDto ToDto(Attempt attempt, int completedLevelCount) => new(attempt.Id, attempt.Status, attempt.StartedAt, attempt.CompletedAt, completedLevelCount);
+    private async Task<AttemptDto> ToDtoAsync(Attempt attempt, int completedLevelCount, CancellationToken cancellationToken)
+    {
+        var versionIds = JsonSerializer.Deserialize<List<Guid>>(attempt.LevelVersionIdsJson) ?? [];
+        var completedIds = attempt.LevelResults.Where(item => item.Completed).Select(item => item.LevelVersionId).ToHashSet();
+        var versions = await db.LevelVersions.Where(item => versionIds.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
+        var levels = new List<StudentCaseLevelDto>(versionIds.Count);
+        for (var order = 0; order < versionIds.Count; order++)
+        {
+            var versionId = versionIds[order];
+            if (!versions.TryGetValue(versionId, out var version)) continue;
+            var definition = JsonSerializer.Deserialize<LevelDefinition>(version.DefinitionJson, JsonOptions)
+                ?? throw new InvalidOperationException("Level version snapshot is invalid.");
+            definition.Tests = definition.Tests.Where(test => !test.Hidden).ToList();
+            levels.Add(new StudentCaseLevelDto(versionId, order, definition));
+        }
+        return new AttemptDto(attempt.Id, attempt.Status, attempt.StartedAt, attempt.CompletedAt, completedLevelCount, versionIds, completedIds.ToArray(), levels);
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true };
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        return options;
+    }
 }

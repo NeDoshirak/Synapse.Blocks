@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ using Synapse.Blocks.Api.Students;
 using Synapse.Blocks.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 var secureCookies = builder.Configuration.GetValue<bool?>("Cookie:Secure") ?? builder.Environment.IsProduction();
 
 builder.Services.AddDbContext<AppDbContext>(options =>

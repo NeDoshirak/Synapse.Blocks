@@ -86,6 +86,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         attempt.HasKey(item => item.Id);
         attempt.HasIndex(item => new { item.CaseId, item.ParticipantId, item.StartedAt });
         attempt.Property(item => item.Status).HasMaxLength(20).IsRequired();
+        attempt.Property(item => item.LevelVersionIdsJson).HasColumnType("jsonb").IsRequired();
         attempt.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
         attempt.HasMany(item => item.LevelResults).WithOne(result => result.Attempt).HasForeignKey(result => result.AttemptId).OnDelete(DeleteBehavior.Restrict);
 

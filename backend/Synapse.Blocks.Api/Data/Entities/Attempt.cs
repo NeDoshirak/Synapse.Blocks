@@ -8,6 +8,7 @@ public sealed class Attempt
     public Guid ParticipantId { get; set; }
     public Participant Participant { get; set; } = null!;
     public string Status { get; set; } = "InProgress";
+    public string LevelVersionIdsJson { get; set; } = "[]";
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAt { get; set; }
     public List<AttemptLevelResult> LevelResults { get; set; } = [];

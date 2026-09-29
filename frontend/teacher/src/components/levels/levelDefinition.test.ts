@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cloneLevelDefinition, makeLevelUpdate } from "./levelDefinition";
 import type { LevelDefinition } from "../../types/api";
 
-const previous: LevelDefinition = { id:"level-1", title:"Old", description:"desc", objective:"goal", allowedBlocks:[1,2], requiredBlocks:[2], tests:[{id:"visible",name:"Visible",input:"1",expectedOutput:"1",hidden:false},{id:"hidden",name:"Secret",input:"99",expectedOutput:"42",hidden:true}], introSteps:[{id:"intro",title:"Explain",body:"Body",mediaUrl:"/a.png",speaker:"guide"}] };
+const previous: LevelDefinition = { id:"level-1", title:"Old", description:"desc", objective:"goal", allowedBlocks:["Input","Operation"], requiredBlocks:["Operation"], tests:[{id:"visible",name:"Visible",input:"1",expectedOutput:"1",hidden:false},{id:"hidden",name:"Secret",input:"99",expectedOutput:"42",hidden:true}], introSteps:[{id:"intro",title:"Explain",body:"Body",mediaUrl:"/a.png",speaker:"guide"}] };
 
 describe("level editing payload",()=>{
  it("preserves hidden test data, template-only fields, and test identifiers when editing metadata",()=>{

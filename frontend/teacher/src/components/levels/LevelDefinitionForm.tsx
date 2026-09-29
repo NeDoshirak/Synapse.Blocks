@@ -4,7 +4,7 @@ import type { LevelDefinition, TeacherLevel } from "../../types/api";
 import { apiClient } from "../../providers/apiClient";
 import { makeLevelUpdate } from "./levelDefinition";
 
-const blockOptions = ["Input", "Operation", "Condition", "Loop", "Variable", "VariableAction", "Output"].map((label, value) => ({ value, label }));
+const blockOptions = ["Input", "Operation", "Condition", "Loop", "Variable", "VariableAction", "Output"].map(label => ({ value: label, label }));
 const blankDefinition = (): LevelDefinition => ({ id: crypto.randomUUID(), title: "Новый уровень", description: "", objective: "", allowedBlocks: ["Input", "Operation", "Condition", "Loop", "Variable"], requiredBlocks: [], tests: [], introSteps: [] });
 
 export function LevelDefinitionForm({ level, initialDefinition, onSaved }: { level?: TeacherLevel; initialDefinition?: LevelDefinition; onSaved: (value: TeacherLevel) => void }) {

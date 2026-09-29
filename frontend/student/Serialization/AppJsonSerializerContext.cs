@@ -12,5 +12,10 @@ namespace Synapse.Blocks.Serialization;
 [JsonSerializable(typeof(List<LevelDefinition>))]
 [JsonSerializable(typeof(HashSet<Guid>))]
 [JsonSerializable(typeof(BlockProgram))]
+[JsonSerializable(typeof(StudentCaseDto))]
+[JsonSerializable(typeof(StudentAttemptDto))]
+[JsonSerializable(typeof(LevelEvaluationDto))]
+[JsonSerializable(typeof(CreateStudentParticipantRequest))]
+[JsonSerializable(typeof(EmptyStudentRequest))]
 [JsonSerializable(typeof(CitySceneDefinition))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext;
