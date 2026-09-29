@@ -1,0 +1,7 @@
+import { PlusOutlined, QrcodeOutlined } from "@ant-design/icons";
+import { Button, Card, Space, Table, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { apiClient } from "../../providers/apiClient";
+import type { TeacherCase } from "../../types/api";
+export default function CasesList(){const[rows,setRows]=useState<TeacherCase[]>([]);const[loading,setLoading]=useState(true);useEffect(()=>{apiClient.request("/api/teacher/cases").then(x=>setRows(x as TeacherCase[])).finally(()=>setLoading(false));},[]);return <><Space style={{width:"100%",justifyContent:"space-between"}}><div><Typography.Title level={2}>Наборы и QR</Typography.Title><Typography.Text type="secondary">Соберите уровни в последовательность для учеников</Typography.Text></div><Button type="primary" icon={<PlusOutlined />} href="/admin/cases/create">Новый набор</Button></Space><Card style={{marginTop:24}}><Table rowKey="id" loading={loading} dataSource={rows.filter(x=>!x.archived)} columns={[{title:"Набор",dataIndex:"title"},{title:"Уровней",render:(_,r)=>r.levels.length},{title:"Статус",render:(_,r)=><Tag color={r.isPublished?"green":"default"}>{r.isPublished?"Опубликован":"Черновик"}</Tag>},{title:"QR",render:(_,r)=>r.shareLinkActive?<QrcodeOutlined />:"—"},{title:"",render:(_,r)=><Link to={`/cases/${r.id}`}>Открыть</Link>}]} /></Card></>}

@@ -15,8 +15,11 @@ public static class PlatformAdminEndpoints
             if (string.IsNullOrWhiteSpace(request.Email) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(request.Email))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["email"] = ["A valid email address is required."] });
             var inviterId = principal.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var token = await invitations.CreateAsync(request.Email, DateTimeOffset.UtcNow.AddDays(7), inviterId);
-            return Results.Created("/api/platform/invitations/accept", new { token });
+            var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
+            var token = await invitations.CreateAsync(request.Email, expiresAt, inviterId);
+            var origin = (context.RequestServices.GetRequiredService<IConfiguration>()["PublicOrigin"] ?? "http://localhost:8080").TrimEnd('/');
+            var invitationUrl = $"{origin}/admin/invitations/accept?token={Uri.EscapeDataString(token)}";
+            return Results.Created("/api/platform/invitations/accept", new { token, expiresAt, invitationUrl });
         });
         app.MapPost("/api/platform/invitations/accept", async (AcceptInvitationRequest request, HttpContext context, IAntiforgery antiforgery, InvitationService invitations) =>
         {

@@ -285,6 +285,7 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 frontend/teacher/dist/
+frontend/teacher/*.tsbuildinfo
 .env
 .env.*
 !.env.example
