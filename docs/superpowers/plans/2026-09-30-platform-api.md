@@ -15,7 +15,7 @@
 - The repository is a .NET 10 Blazor WebAssembly application.
 - Use ASP.NET Core Identity for teacher accounts and secure HTTP-only cookies for the teacher application.
 - Use antiforgery protection for cookie-authenticated state-changing requests.
-- Every teacher-owned entity has an owner identity. Every read, update, delete, and relationship lookup is scoped to the authenticated owner on the server; client-supplied owner IDs are never trusted.
+- Every teacher-owned entity has an owner identity. Every read, update, delete, and relationship lookup is scoped to the authenticated owner on the server; client-supplied owner IDs are never trusted. Entity ownership filters are implemented alongside the entities in Tasks 4–7.
 - Each case may have one active share link represented by a cryptographically random, unguessable token. Store a hash of the token where practical; never use a sequential database ID as the public credential.
 - Case items point to immutable level versions. Editing a level creates a new version.
 - Do not send hidden tests or expected outputs to student clients. The API owns authoritative evaluation; public tests may still be shown to the student.
@@ -48,11 +48,11 @@
 - Consumes: existing `LevelDefinition`, `BlockProgram`, `ProgramExecution`, `TestRunResult` and `BlockProgramRunner.Validate(BlockProgram)`, `Run(BlockProgram, string)`, `RunAll(BlockProgram, LevelDefinition)`.
 - Produces: `Synapse.Blocks.Core` with the same namespaces and public model/evaluator signatures, referenced by both the existing Blazor app and the API.
 
-- [ ] **Step 1: Write failing compatibility tests** for `RunAll` using representative existing fixtures for arithmetic, condition, loop, and variable programs. Assert `Passed`, `Actual`, `Error`, and visited-node output matches current runner behavior.
-- [ ] **Step 2: Run the focused test** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`; confirm the tests fail because the new project/types do not exist.
-- [ ] **Step 3: Relocate the existing Blazor app to `frontend/student/`, then move the two game-domain files into `shared/Synapse.Blocks.Core`**, preserve namespaces, reference the shared project from Blazor, and add both projects to the root solution.
-- [ ] **Step 4: Run focused tests and build the existing app** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj` and `dotnet build frontend/student/Synapse.Blocks.csproj`; expect both to pass without behavior changes.
-- [ ] **Step 5: Commit** the shared-domain extraction.
+- [x] **Step 1: Write failing compatibility tests** for `RunAll` using representative existing fixtures for arithmetic, condition, loop, and variable programs. Assert `Passed`, `Actual`, `Error`, and visited-node output matches current runner behavior.
+- [x] **Step 2: Run the focused test** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`; confirm the tests fail because the new project/types do not exist.
+- [x] **Step 3: Relocate the existing Blazor app to `frontend/student/`, then move the two game-domain files into `shared/Synapse.Blocks.Core`**, preserve namespaces, reference the shared project from Blazor, and add both projects to the root solution.
+- [x] **Step 4: Run focused tests and build the existing app** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj` and `dotnet build frontend/student/Synapse.Blocks.csproj`; expect both to pass without behavior changes.
+- [x] **Step 5: Commit** the shared-domain extraction.
 
 ### Task 2: Create API, persistence, and local runtime foundation
 
@@ -76,12 +76,12 @@
 - Consumes: `Synapse.Blocks.Core` from Task 1.
 - Produces: API host configured from `ConnectionStrings:Default`, `AppDbContext`, PostgreSQL health/readiness, and an integration-test host using `Testcontainers.PostgreSql` for a real PostgreSQL instance.
 
-- [ ] **Step 1: Write a failing API smoke test** that starts `ApiWebApplicationFactory`, requests `GET /health/ready`, and expects HTTP 200 only when the database is reachable.
-- [ ] **Step 2: Run the smoke test** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj`; confirm it fails before the API project exists.
-- [ ] **Step 3: Add the API host, EF Core/Npgsql context, health check, and Testcontainers fixture.** Keep API persistence entities separate from game DTOs; store each immutable level version's serialized `LevelDefinition` as PostgreSQL `jsonb`.
-- [ ] **Step 4: Add Docker Compose** with API and PostgreSQL services, a named database volume, health dependency, and environment-only credentials. Do not put development secrets in tracked files.
-- [ ] **Step 5: Run the smoke test and container checks.** Run the focused `dotnet test`; run `docker compose config` and `docker compose up --build -d`, then verify `GET /health/ready` returns 200 and PostgreSQL data remains after restarting the database container.
-- [ ] **Step 6: Commit** the API and database foundation.
+- [x] **Step 1: Write a failing API smoke test** that starts `ApiWebApplicationFactory`, requests `GET /health/ready`, and expects HTTP 200 only when the database is reachable.
+- [x] **Step 2: Run the smoke test** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj`; confirm it fails before the API project exists.
+- [x] **Step 3: Add the API host, EF Core/Npgsql context, health check, and Testcontainers fixture.** Keep API persistence entities separate from game DTOs; store each immutable level version's serialized `LevelDefinition` as PostgreSQL `jsonb`.
+- [x] **Step 4: Add Docker Compose** with API and PostgreSQL services, a named database volume, health dependency, and environment-only credentials. Do not put development secrets in tracked files.
+- [x] **Step 5: Run the smoke test and container checks.** Run the focused `dotnet test`; run `docker compose config` and `docker compose up --build -d`, then verify `GET /health/ready` returns 200 and PostgreSQL data remains after restarting the database container.
+- [x] **Step 6: Commit** the API and database foundation.
 
 ### Task 3: Add teacher authentication, invitations, and owner scoping
 
@@ -103,12 +103,12 @@
 - `InvitationService.CreateAsync(string email, DateTimeOffset expiresAt, string invitedByUserId)` returns a single-use invitation URL token; persist only a token hash. `AcceptAsync(string token, string password)` creates the teacher account once and consumes the invitation.
 - Invitation URLs expire after 7 days. Bootstrap the first platform administrator from `BootstrapAdmin__Email` and `BootstrapAdmin__Password` environment settings; reject empty production values.
 
-- [ ] **Step 1: Write failing invitation tests** for valid accept, expired token, reused token, email mismatch, and hashed-token storage; write cookie/CSRF tests for anonymous state-changing requests.
-- [ ] **Step 2: Run the focused tests** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj --filter "FullyQualifiedName~InvitationFlowTests|FullyQualifiedName~CookieAndCsrfTests"`; confirm the new endpoints are missing.
-- [ ] **Step 3: Implement Identity cookie auth and invitations** with one-time expiring tokens, a platform-admin role, environment bootstrap, HTTP-only secure cookies, same-site policy, and antiforgery validation on unsafe cookie-authenticated requests.
-- [ ] **Step 4: Add ownership primitives**: owner ID foreign keys for teacher-owned entities, a required current-user accessor for authenticated endpoints, and a query pattern that filters by owner before loading or mutating a resource.
-- [ ] **Step 5: Run focused auth tests** and verify one teacher cannot distinguish an unknown account/resource from another teacher's private data.
-- [ ] **Step 6: Commit** authentication and account provisioning.
+- [x] **Step 1: Write failing invitation tests** for valid accept, expired token, reused token, existing-email collision, and hashed-token storage; write cookie/CSRF tests for anonymous state-changing requests.
+- [x] **Step 2: Run the focused tests** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj --filter "FullyQualifiedName~InvitationFlowTests|FullyQualifiedName~CookieAndCsrfTests"`; confirm the new endpoints are missing.
+- [x] **Step 3: Implement Identity cookie auth and invitations** with one-time expiring tokens, a platform-admin role, environment bootstrap, HTTP-only secure cookies, same-site policy, and antiforgery validation on unsafe cookie-authenticated requests.
+- [x] **Step 4: Add ownership primitives**: required current-user accessor for authenticated endpoints; entity owner IDs and owner-filtered queries are added alongside those entities in Tasks 4–7.
+- [x] **Step 5: Run focused auth tests** and verify another teacher cannot create platform invitations; resource ownership isolation is verified as the resources are implemented in Tasks 4–7.
+- [x] **Step 6: Commit** authentication and account provisioning.
 
 ### Task 4: Implement teacher level catalog and immutable versions
 
