@@ -33,6 +33,13 @@ public sealed class CaseArchiveTests(PostgreSqlFixture database) : IClassFixture
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var preservedAttempt = await db.Attempts.AsNoTracking().SingleAsync(attempt => attempt.Id == attemptId);
         Assert.Equal("InProgress", preservedAttempt.Status);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await teacher.PostAsync($"/api/teacher/cases/{caseId}/restore", null)).StatusCode);
+        using var restored = System.Text.Json.JsonDocument.Parse(await (await teacher.GetAsync($"/api/teacher/cases/{caseId}")).Content.ReadAsStringAsync());
+        Assert.False(restored.RootElement.GetProperty("archived").GetBoolean());
+        Assert.False(restored.RootElement.GetProperty("isPublished").GetBoolean());
+        Assert.False(restored.RootElement.GetProperty("shareLinkActive").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, (await teacher.GetAsync($"/api/student/cases/{token}")).StatusCode);
     }
 
     public void Dispose() => _factory.Dispose();

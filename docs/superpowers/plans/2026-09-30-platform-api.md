@@ -221,13 +221,13 @@
 - `DELETE /api/teacher/cases/{caseId}` archives a case, deactivates its QR link, and preserves attempts/reports; it never cascades deletion into student history.
 - Readiness route: `GET /health/ready` fails when PostgreSQL is unavailable or unapplied required migrations prevent serving requests.
 
-- [ ] **Step 1: Write failing report tests** for maximum progress across repeated attempts, equal best ties, normalized duplicate names, empty reports, and cross-owner report isolation.
-- [ ] **Step 2: Run focused report tests** and confirm reporting routes are not implemented.
-- [ ] **Step 3: Implement report aggregation and final migration configuration.** Ensure all query paths filter by case owner before aggregating attempts.
-- [ ] **Step 3a: Implement case archiving** as a reversible/visible archived state in teacher data, with share-link deactivation and retained attempt records.
-- [ ] **Step 4: Run the API test suite** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj` and core tests with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`.
-- [ ] **Step 5: Verify clean deployment** with `docker compose down -v`, `docker compose up --build -d`, migration application, `/health/ready`, invitation sign-in, API authoring, QR resolution, evaluation, and reports. Do not use production data.
-- [ ] **Step 6: Update README** with local environment keys, bootstrap admin setup, Docker Compose commands, invitation flow, and API test commands; state that secrets are supplied out of band.
-- [ ] **Step 7: Commit** reporting and deployment documentation.
+- [x] **Step 1: Write failing report tests** for maximum progress across repeated attempts, equal best ties, normalized duplicate names, empty reports, and cross-owner report isolation.
+- [x] **Step 2: Run focused report tests** and confirm reporting routes are not implemented.
+- [x] **Step 3: Implement report aggregation and final migration configuration.** Ensure all query paths filter by case owner before aggregating attempts.
+- [x] **Step 3a: Implement case archiving** as a reversible/visible archived state in teacher data, with share-link deactivation and retained attempt records.
+- [x] **Step 4: Run the API test suite** with `dotnet test tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj` and core tests with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`.
+- [x] **Step 5: Verify clean deployment** using a separate disposable Compose project and port so the existing local database volume remains intact; verify migration application, `/health/ready`, invitation sign-in, API authoring, QR resolution, evaluation, and reports. Do not use production data.
+- [x] **Step 6: Update README** with local environment keys, bootstrap admin setup, Docker Compose commands, invitation flow, and API test commands; state that secrets are supplied out of band.
+- [x] **Step 7: Commit** reporting and deployment documentation.
 
 Before production enablement, document the retention and deletion policy with the platform owner. The first release performs no automatic attempt purging; archiving cases disables new access while preserving history.

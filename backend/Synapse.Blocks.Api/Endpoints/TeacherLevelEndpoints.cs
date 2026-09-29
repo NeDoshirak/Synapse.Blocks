@@ -9,7 +9,7 @@ public static class TeacherLevelEndpoints
 {
     public static IEndpointRouteBuilder MapTeacherLevelEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/teacher/levels").RequireAuthorization();
+        var group = app.MapGroup("/api/teacher/levels").RequireAuthorization().AddEndpointFilter<AntiforgeryEndpointFilter>();
         group.MapGet("/", async (ICurrentUser current, LevelService levels, CancellationToken ct) =>
             Results.Ok(await levels.ListAsync(current.UserId, ct)));
         group.MapPost("/", async (CreateLevelRequest request, ICurrentUser current, LevelService levels, CancellationToken ct) =>

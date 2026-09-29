@@ -84,6 +84,17 @@ public sealed class CaseService(AppDbContext db)
         return true;
     }
 
+    public async Task<bool> RestoreAsync(string ownerId, Guid caseId, CancellationToken cancellationToken = default)
+    {
+        var entity = await db.TeacherCases.FirstOrDefaultAsync(item => item.Id == caseId && item.OwnerId == ownerId, cancellationToken);
+        if (entity is null) return false;
+        entity.Archived = false;
+        entity.IsPublished = false;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     internal static StudentCaseDto ToStudentDto(TeacherCase entity)
     {
         var levels = entity.Levels.OrderBy(level => level.Order).Select(level =>

@@ -7,8 +7,8 @@ namespace Synapse.Blocks.Api.Tests.Infrastructure;
 
 public sealed class ApiWebApplicationFactory(
     string connectionString,
-    string bootstrapEmail = "",
-    string bootstrapPassword = "") : WebApplicationFactory<Program>
+    string bootstrapEmail = "admin@example.test",
+    string bootstrapPassword = "Admin-password-123!") : WebApplicationFactory<Program>
 {
     public ConcurrentQueue<string> CapturedLogs { get; } = new();
 

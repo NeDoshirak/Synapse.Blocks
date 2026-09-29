@@ -1,6 +1,7 @@
 using Synapse.Blocks.Api.Auth;
 using Synapse.Blocks.Api.Cases;
 using Synapse.Blocks.Api.Contracts.Cases;
+using Synapse.Blocks.Api.Operations;
 
 namespace Synapse.Blocks.Api.Endpoints;
 
@@ -8,7 +9,7 @@ public static class TeacherCaseEndpoints
 {
     public static IEndpointRouteBuilder MapTeacherCaseEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/teacher/cases").RequireAuthorization();
+        var group = app.MapGroup("/api/teacher/cases").RequireAuthorization().AddEndpointFilter<AntiforgeryEndpointFilter>();
         group.MapGet("/", async (ICurrentUser current, CaseService cases, CancellationToken ct) => Results.Ok(await cases.ListAsync(current.UserId, ct)));
         group.MapPost("/", async (CreateCaseRequest request, ICurrentUser current, CaseService cases, CancellationToken ct) =>
         {
@@ -44,6 +45,8 @@ public static class TeacherCaseEndpoints
         });
         group.MapDelete("/{caseId:guid}", async (Guid caseId, ICurrentUser current, CaseService cases, CancellationToken ct) =>
             await cases.ArchiveAsync(current.UserId, caseId, ct) ? Results.NoContent() : Results.NotFound());
+        group.MapPost("/{caseId:guid}/restore", async (Guid caseId, ICurrentUser current, CaseArchiveService archives, CancellationToken ct) =>
+            await archives.RestoreAsync(current.UserId, caseId, ct) ? Results.NoContent() : Results.NotFound());
         group.MapPost("/{caseId:guid}/share-link", async (Guid caseId, ICurrentUser current, ShareLinkService links, CancellationToken ct) =>
         {
             var created = await links.CreateOrRotateAsync(current.UserId, caseId, ct);

@@ -6,6 +6,9 @@ using Synapse.Blocks.Api.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Endpoints;
 using Synapse.Blocks.Api.Levels;
+using Synapse.Blocks.Api.Operations;
+using Synapse.Blocks.Api.Reports;
+using Synapse.Blocks.Api.Health;
 using Synapse.Blocks.Api.Students;
 using Synapse.Blocks.Services;
 
@@ -59,10 +62,13 @@ builder.Services.AddScoped<CaseService>();
 builder.Services.AddScoped<ShareLinkService>();
 builder.Services.AddScoped<AttemptService>();
 builder.Services.AddScoped<ProgramEvaluationService>();
+builder.Services.AddScoped<CaseArchiveService>();
+builder.Services.AddScoped<CaseReportService>();
 builder.Services.AddSingleton<BlockProgramRunner>();
 builder.Services.AddHostedService<BootstrapPlatformAdmin>();
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<AppDbContext>(name: "postgres");
+    .AddDbContextCheck<AppDbContext>(name: "postgres")
+    .AddCheck<DatabaseMigrationHealthCheck>("migrations");
 
 var app = builder.Build();
 app.UseAuthentication();
@@ -71,7 +77,7 @@ app.UseAntiforgery();
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
-    Predicate = check => check.Name == "postgres"
+    Predicate = check => check.Name is "postgres" or "migrations"
 });
 app.MapAuthEndpoints();
 app.MapPlatformAdminEndpoints();
@@ -79,6 +85,7 @@ app.MapTeacherLevelEndpoints();
 app.MapTeacherCaseEndpoints();
 app.MapStudentCaseEndpoints();
 app.MapStudentAttemptEndpoints();
+app.MapTeacherReportEndpoints();
 
 app.Run();
 
