@@ -38,6 +38,12 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
 
     public async Task<StudentCaseDto?> ResolveAsync(string token, CancellationToken cancellationToken = default)
     {
+        var item = await ResolveCaseAsync(token, cancellationToken);
+        return item is null ? null : CaseService.ToStudentDto(item);
+    }
+
+    public async Task<TeacherCase?> ResolveCaseAsync(string token, CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(token) || token.Length != 43) return null;
         var hash = Hash(token);
         var link = await db.ShareLinks.AsNoTracking()
@@ -46,7 +52,7 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
         if (link is null || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(link.TokenHash), Convert.FromHexString(hash))
             || !link.Case.IsPublished || link.Case.Archived)
             return null;
-        return CaseService.ToStudentDto(link.Case);
+        return link.Case;
     }
 
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

@@ -6,6 +6,8 @@ using Synapse.Blocks.Api.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Endpoints;
 using Synapse.Blocks.Api.Levels;
+using Synapse.Blocks.Api.Students;
+using Synapse.Blocks.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var secureCookies = builder.Configuration.GetValue<bool?>("Cookie:Secure") ?? builder.Environment.IsProduction();
@@ -55,6 +57,9 @@ builder.Services.AddSingleton<LevelDefinitionValidator>();
 builder.Services.AddScoped<LevelService>();
 builder.Services.AddScoped<CaseService>();
 builder.Services.AddScoped<ShareLinkService>();
+builder.Services.AddScoped<AttemptService>();
+builder.Services.AddScoped<ProgramEvaluationService>();
+builder.Services.AddSingleton<BlockProgramRunner>();
 builder.Services.AddHostedService<BootstrapPlatformAdmin>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "postgres");
@@ -73,6 +78,7 @@ app.MapPlatformAdminEndpoints();
 app.MapTeacherLevelEndpoints();
 app.MapTeacherCaseEndpoints();
 app.MapStudentCaseEndpoints();
+app.MapStudentAttemptEndpoints();
 
 app.Run();
 

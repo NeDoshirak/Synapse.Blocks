@@ -31,6 +31,16 @@ public sealed partial class TeacherLevelEndpointsTests(PostgreSqlFixture databas
     }
 
     [Fact]
+    public async Task Oversized_level_definition_is_rejected()
+    {
+        using var teacher = await CreateTeacherClientAsync();
+        var definition = Definition("Oversized");
+        definition.StoryIntro = new string('x', 5 * 1024 * 1024);
+        var response = await teacher.PostAsJsonAsync("/api/teacher/levels", new { definition });
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.RequestEntityTooLarge, HttpStatusCode.UnprocessableEntity });
+    }
+
+    [Fact]
     public async Task Another_teacher_cannot_read_or_mutate_level()
     {
         using var owner = await CreateTeacherClientAsync();

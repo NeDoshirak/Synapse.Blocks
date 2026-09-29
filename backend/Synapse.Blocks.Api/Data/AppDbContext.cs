@@ -13,6 +13,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<TeacherCase> TeacherCases => Set<TeacherCase>();
     public DbSet<CaseLevel> CaseLevels => Set<CaseLevel>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
+    public DbSet<Participant> Participants => Set<Participant>();
+    public DbSet<Attempt> Attempts => Set<Attempt>();
+    public DbSet<AttemptLevelResult> AttemptLevelResults => Set<AttemptLevelResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +54,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         teacherCase.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.Levels).WithOne(level => level.Case).HasForeignKey(level => level.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.ShareLinks).WithOne(link => link.Case).HasForeignKey(link => link.CaseId).OnDelete(DeleteBehavior.Restrict);
+        teacherCase.HasMany<Participant>().WithOne(participant => participant.Case).HasForeignKey(participant => participant.CaseId).OnDelete(DeleteBehavior.Restrict);
+        teacherCase.HasMany<Attempt>().WithOne(attempt => attempt.Case).HasForeignKey(attempt => attempt.CaseId).OnDelete(DeleteBehavior.Restrict);
 
         var caseLevel = modelBuilder.Entity<CaseLevel>();
         caseLevel.ToTable("case_levels");
@@ -64,5 +69,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         shareLink.HasIndex(item => item.TokenHash).IsUnique();
         shareLink.HasIndex(item => item.CaseId).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
         shareLink.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
+
+        var participant = modelBuilder.Entity<Participant>();
+        participant.ToTable("participants");
+        participant.HasKey(item => item.Id);
+        participant.HasIndex(item => new { item.CaseId, item.ContinuationHash }).IsUnique();
+        participant.HasIndex(item => new { item.CaseId, item.NormalizedName });
+        participant.Property(item => item.DisplayName).HasMaxLength(80).IsRequired();
+        participant.Property(item => item.NormalizedName).HasMaxLength(80).IsRequired();
+        participant.Property(item => item.ContinuationHash).HasMaxLength(64).IsRequired();
+        participant.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
+        participant.HasMany(item => item.Attempts).WithOne(attempt => attempt.Participant).HasForeignKey(attempt => attempt.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+
+        var attempt = modelBuilder.Entity<Attempt>();
+        attempt.ToTable("attempts");
+        attempt.HasKey(item => item.Id);
+        attempt.HasIndex(item => new { item.CaseId, item.ParticipantId, item.StartedAt });
+        attempt.Property(item => item.Status).HasMaxLength(20).IsRequired();
+        attempt.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
+        attempt.HasMany(item => item.LevelResults).WithOne(result => result.Attempt).HasForeignKey(result => result.AttemptId).OnDelete(DeleteBehavior.Restrict);
+
+        var attemptResult = modelBuilder.Entity<AttemptLevelResult>();
+        attemptResult.ToTable("attempt_level_results");
+        attemptResult.HasKey(item => item.Id);
+        attemptResult.HasIndex(item => new { item.AttemptId, item.LevelVersionId }).IsUnique();
+        attemptResult.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
     }
 }

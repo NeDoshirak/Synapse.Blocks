@@ -169,7 +169,7 @@
 - [x] **Step 2: Run focused case tests** and confirm the route set is absent.
 - [x] **Step 3: Implement case services and routes** with owner-filtered queries and explicit publication state.
 - [x] **Step 4: Implement token generation and resolution** using at least 256 random bits and stored hashes; revoked, unknown, and unpublished cases all return the same public unavailable response.
-- [x] **Step 5: Run case and QR tests**; confirm case content remains after the share link is deactivated. Attempt-history retention is verified after attempts are implemented in Task 6.
+- [x] **Step 5: Run case and QR tests**; confirm case content and existing attempt history remain after the share link is deactivated.
 - [x] **Step 6: Commit** case composition and QR access.
 
 ### Task 6: Implement student participants, attempts, and authoritative evaluation
@@ -195,13 +195,13 @@
 - `ProgramEvaluationService.EvaluateAsync(Guid attemptId, Guid levelVersionId, BlockProgram program) -> LevelEvaluationDto` runs `BlockProgramRunner.Validate` and all tests from the pinned level version. Response shape is `{ passed, publicTestResults: [{ testId, name, passed, input, expected, actual, error }] }`; it contains public test feedback and an authoritative `passed` flag, never hidden expected outputs.
 - Name normalization trims and collapses whitespace and compares case-insensitively; original display spelling remains reportable.
 
-- [ ] **Step 1: Write failing student tests** for required name, same-device continuation, explicit new attempt, QR/case/version membership checks, 5 MiB level and 256 KiB evaluation request limits, 500-node and 1,000-connection caps, public test feedback, hidden test secrecy in serialized responses and captured logs, and no-complete on any failed hidden or public case.
-- [ ] **Step 2: Run focused student tests** and confirm participant/attempt endpoints are missing.
-- [ ] **Step 3: Implement participant and attempt persistence.** Hash the continuation cookie identifier before storage; scope participant identity to the case and normalized display name.
-- [ ] **Step 4: Implement authoritative evaluation** with size/node/connection limits before execution, the existing 10,000-step runner cap, server-only expected outputs, and idempotent result upsert keyed by `(AttemptId, LevelVersionId)`.
-- [ ] **Step 5: Enforce monotonic progress**: a completed level remains completed, and an attempt advances only through the case's next ordered level.
-- [ ] **Step 6: Run focused student/privacy tests**; inspect serialized API output and captured logs for hidden expected values and test malicious cross-case submissions.
-- [ ] **Step 7: Commit** student attempt and evaluation endpoints.
+- [x] **Step 1: Write failing student tests** for required name, same-device continuation, explicit new attempt, QR/case/version membership checks, 5 MiB level and 256 KiB evaluation request limits, 500-node and 1,000-connection caps, public test feedback, hidden test secrecy in serialized responses and captured logs, and no-complete on any failed hidden or public case.
+- [x] **Step 2: Run focused student tests** and confirm participant/attempt endpoints are missing.
+- [x] **Step 3: Implement participant and attempt persistence.** Hash the continuation cookie identifier before storage; scope participant identity to the case and normalized display name.
+- [x] **Step 4: Implement authoritative evaluation** with size/node/connection limits before execution, the existing 10,000-step runner cap, server-only expected outputs, and idempotent result upsert keyed by `(AttemptId, LevelVersionId)`.
+- [x] **Step 5: Enforce monotonic progress**: a completed level remains completed, and an attempt advances only through the case's next ordered level.
+- [x] **Step 6: Run focused student/privacy tests**; inspect serialized API output and captured logs for hidden expected values and test malicious cross-case submissions.
+- [x] **Step 7: Commit** student attempt and evaluation endpoints.
 
 ### Task 7: Implement owner-scoped reports, complete migrations, and API verification
 

@@ -9,7 +9,13 @@ internal static class CaseTestSupport
 {
     public static async Task<(Guid Id, Guid VersionId)> CreateLevelAsync(HttpClient client, string title)
     {
-        var result = await client.PostAsJsonAsync("/api/teacher/levels", new { definition = new LevelDefinition { Title = title, Tests = [new LevelTestCase { Name = "public", Input = "1", ExpectedOutput = "1" }, new LevelTestCase { Name = "hidden", Input = "2", ExpectedOutput = "secret", Hidden = true }] } });
+        var definition = new LevelDefinition { Title = title, Tests = [new LevelTestCase { Name = "public", Input = "1", ExpectedOutput = "1" }, new LevelTestCase { Name = "hidden", Input = "2", ExpectedOutput = "secret", Hidden = true }] };
+        return await CreateLevelAsync(client, definition);
+    }
+
+    public static async Task<(Guid Id, Guid VersionId)> CreateLevelAsync(HttpClient client, LevelDefinition definition)
+    {
+        var result = await client.PostAsJsonAsync("/api/teacher/levels", new { definition });
         result.EnsureSuccessStatusCode();
         using var json = JsonDocument.Parse(await result.Content.ReadAsStringAsync());
         return (json.RootElement.GetProperty("id").GetGuid(), json.RootElement.GetProperty("currentVersionId").GetGuid());
