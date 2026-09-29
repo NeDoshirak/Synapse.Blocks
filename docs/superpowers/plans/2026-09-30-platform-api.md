@@ -4,7 +4,7 @@
 
 **Goal:** Add the ASP.NET Core/PostgreSQL platform API that securely stores teacher-owned levels, ordinary cases, QR links, and student attempt progress while reusing the existing C# game evaluator.
 
-**Architecture:** Extract the level models and block evaluator into a shared C# library. Add an ASP.NET Core API with EF Core/Npgsql, Identity cookie authentication, owner-scoped teacher endpoints, anonymous QR-scoped student endpoints, immutable level versions, and server-authoritative evaluation. Docker Compose provides the API and persistent PostgreSQL service.
+**Architecture:** Keep the Blazor and Refine apps in `frontend/`, the ASP.NET Core API in `backend/`, and shared game code in `shared/`. Extract the level models and block evaluator into a shared C# library. Add an ASP.NET Core API with EF Core/Npgsql, Identity cookie authentication, owner-scoped teacher endpoints, anonymous QR-scoped student endpoints, immutable level versions, and server-authoritative evaluation. Docker Compose runs the API and PostgreSQL separately.
 
 **Tech Stack:** .NET 10, ASP.NET Core, ASP.NET Core Identity, EF Core 10, Npgsql, PostgreSQL, Docker Compose, xUnit.
 
@@ -35,10 +35,11 @@
 ### Task 1: Extract the shared game domain and evaluator
 
 **Files:**
-- Create: `src/Synapse.Blocks.Core/Synapse.Blocks.Core.csproj`
-- Move: `Models/GameModels.cs` to `src/Synapse.Blocks.Core/Models/GameModels.cs`
-- Move: `Services/BlockProgramRunner.cs` to `src/Synapse.Blocks.Core/Services/BlockProgramRunner.cs`
-- Modify: `Synapse.Blocks.csproj`
+- Create: `shared/Synapse.Blocks.Core/Synapse.Blocks.Core.csproj`
+- Move: existing Blazor project files and `wwwroot/` into `frontend/student/` (excluding the two shared C# source files moved below)
+- Move: `frontend/student/Models/GameModels.cs` to `shared/Synapse.Blocks.Core/Models/GameModels.cs`
+- Move: `frontend/student/Services/BlockProgramRunner.cs` to `shared/Synapse.Blocks.Core/Services/BlockProgramRunner.cs`
+- Modify: `frontend/student/Synapse.Blocks.csproj`
 - Modify: `Synapse.Blocks.slnx`
 - Create: `tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`
 - Create: `tests/Synapse.Blocks.Core.Tests/BlockProgramRunnerTests.cs`
@@ -49,24 +50,24 @@
 
 - [ ] **Step 1: Write failing compatibility tests** for `RunAll` using representative existing fixtures for arithmetic, condition, loop, and variable programs. Assert `Passed`, `Actual`, `Error`, and visited-node output matches current runner behavior.
 - [ ] **Step 2: Run the focused test** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj`; confirm the tests fail because the new project/types do not exist.
-- [ ] **Step 3: Move models and runner into `Synapse.Blocks.Core`**, preserve namespaces, reference the project from the Blazor app, and add the project to the solution.
-- [ ] **Step 4: Run focused tests and build the existing app** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj` and `dotnet build Synapse.Blocks.csproj`; expect both to pass without behavior changes.
+- [ ] **Step 3: Relocate the existing Blazor app to `frontend/student/`, then move the two game-domain files into `shared/Synapse.Blocks.Core`**, preserve namespaces, reference the shared project from Blazor, and add both projects to the root solution.
+- [ ] **Step 4: Run focused tests and build the existing app** with `dotnet test tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj` and `dotnet build frontend/student/Synapse.Blocks.csproj`; expect both to pass without behavior changes.
 - [ ] **Step 5: Commit** the shared-domain extraction.
 
 ### Task 2: Create API, persistence, and local runtime foundation
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Synapse.Blocks.Api.csproj`
-- Create: `src/Synapse.Blocks.Api/Program.cs`
-- Create: `src/Synapse.Blocks.Api/Dockerfile`
-- Create: `src/Synapse.Blocks.Api/appsettings.json`
-- Create: `src/Synapse.Blocks.Api/Data/AppDbContext.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/` for persistence-only entities
-- Create: `src/Synapse.Blocks.Api/Health/` for readiness checks
+- Create: `backend/Synapse.Blocks.Api/Synapse.Blocks.Api.csproj`
+- Create: `backend/Synapse.Blocks.Api/Program.cs`
+- Create: `backend/Synapse.Blocks.Api/Dockerfile`
+- Create: `backend/Synapse.Blocks.Api/appsettings.json`
+- Create: `backend/Synapse.Blocks.Api/Data/AppDbContext.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/` for persistence-only entities
+- Create: `backend/Synapse.Blocks.Api/Health/` for readiness checks
 - Create: `tests/Synapse.Blocks.Api.Tests/Synapse.Blocks.Api.Tests.csproj`
 - Create: `tests/Synapse.Blocks.Api.Tests/Infrastructure/ApiWebApplicationFactory.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Infrastructure/PostgreSqlFixture.cs`
-- Create: `docker-compose.yml`
+- Create: `docker-compose.yml` with separate `api` and `postgres` services
 - Create: `.dockerignore`
 - Modify: `Synapse.Blocks.slnx`
 - Modify: `.gitignore`
@@ -85,14 +86,14 @@
 ### Task 3: Add teacher authentication, invitations, and owner scoping
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Auth/ApplicationUser.cs`
-- Create: `src/Synapse.Blocks.Api/Auth/Invitation.cs`
-- Create: `src/Synapse.Blocks.Api/Auth/InvitationService.cs`
-- Create: `src/Synapse.Blocks.Api/Auth/BootstrapPlatformAdmin.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/AuthEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/PlatformAdminEndpoints.cs`
-- Modify: `src/Synapse.Blocks.Api/Data/AppDbContext.cs`
-- Modify: `src/Synapse.Blocks.Api/Program.cs`
+- Create: `backend/Synapse.Blocks.Api/Auth/ApplicationUser.cs`
+- Create: `backend/Synapse.Blocks.Api/Auth/Invitation.cs`
+- Create: `backend/Synapse.Blocks.Api/Auth/InvitationService.cs`
+- Create: `backend/Synapse.Blocks.Api/Auth/BootstrapPlatformAdmin.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/AuthEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/PlatformAdminEndpoints.cs`
+- Modify: `backend/Synapse.Blocks.Api/Data/AppDbContext.cs`
+- Modify: `backend/Synapse.Blocks.Api/Program.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Auth/InvitationFlowTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Auth/CookieAndCsrfTests.cs`
 
@@ -112,14 +113,14 @@
 ### Task 4: Implement teacher level catalog and immutable versions
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Data/Entities/TeacherLevel.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/LevelVersion.cs`
-- Create: `src/Synapse.Blocks.Api/Levels/LevelDefinitionValidator.cs`
-- Create: `src/Synapse.Blocks.Api/Levels/LevelService.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/TeacherLevelEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Contracts/Levels/` request and response DTOs
-- Modify: `src/Synapse.Blocks.Api/Data/AppDbContext.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Migrations/`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/TeacherLevel.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/LevelVersion.cs`
+- Create: `backend/Synapse.Blocks.Api/Levels/LevelDefinitionValidator.cs`
+- Create: `backend/Synapse.Blocks.Api/Levels/LevelService.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/TeacherLevelEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Contracts/Levels/` request and response DTOs
+- Modify: `backend/Synapse.Blocks.Api/Data/AppDbContext.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Migrations/`
 - Create: `tests/Synapse.Blocks.Api.Tests/Levels/TeacherLevelEndpointsTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Levels/LevelVersionTests.cs`
 
@@ -133,22 +134,22 @@
 - [ ] **Step 1: Write failing level tests** for valid creation, invalid definition rejection, version increments, stale-version HTTP 409 without mutation, and cross-owner GET/PUT returning not-found without mutation.
 - [ ] **Step 2: Run the focused level tests** and confirm the routes/handlers do not exist.
 - [ ] **Step 3: Implement entities, validator, service, routes, and the first EF migration.** Preserve all fields in `LevelDefinition`, `LevelIntroStep`, and `LevelTestCase` through the serialized version snapshot.
-- [ ] **Step 4: Seed existing `wwwroot/levels.json` entries as reusable starter definitions** that are copied into a teacher's catalog on first access; starter entries are templates, not shared editable ownerless rows.
+- [ ] **Step 4: Seed existing `frontend/student/wwwroot/levels.json` entries as reusable starter definitions** that are copied into a teacher's catalog on first access; starter entries are templates, not shared editable ownerless rows.
 - [ ] **Step 5: Run level and migration tests**; assert a foreign owner cannot read or change the definition, including by supplying a version ID directly.
 - [ ] **Step 6: Commit** level authoring APIs and version storage.
 
 ### Task 5: Implement ordinary cases and QR share-link lifecycle
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Data/Entities/TeacherCase.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/CaseLevel.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/ShareLink.cs`
-- Create: `src/Synapse.Blocks.Api/Cases/CaseService.cs`
-- Create: `src/Synapse.Blocks.Api/Cases/ShareLinkService.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/TeacherCaseEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/StudentCaseEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Contracts/Cases/` request and response DTOs
-- Modify: `src/Synapse.Blocks.Api/Data/AppDbContext.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/TeacherCase.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/CaseLevel.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/ShareLink.cs`
+- Create: `backend/Synapse.Blocks.Api/Cases/CaseService.cs`
+- Create: `backend/Synapse.Blocks.Api/Cases/ShareLinkService.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/TeacherCaseEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/StudentCaseEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Contracts/Cases/` request and response DTOs
+- Modify: `backend/Synapse.Blocks.Api/Data/AppDbContext.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Cases/CaseOwnershipTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Cases/CaseArchiveTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Cases/ShareLinkLifecycleTests.cs`
@@ -174,15 +175,15 @@
 ### Task 6: Implement student participants, attempts, and authoritative evaluation
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Data/Entities/Participant.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/Attempt.cs`
-- Create: `src/Synapse.Blocks.Api/Data/Entities/AttemptLevelResult.cs`
-- Create: `src/Synapse.Blocks.Api/Students/StudentNameNormalizer.cs`
-- Create: `src/Synapse.Blocks.Api/Students/AttemptService.cs`
-- Create: `src/Synapse.Blocks.Api/Students/ProgramEvaluationService.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/StudentAttemptEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Contracts/Students/` request and response DTOs
-- Modify: `src/Synapse.Blocks.Api/Data/AppDbContext.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/Participant.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/Attempt.cs`
+- Create: `backend/Synapse.Blocks.Api/Data/Entities/AttemptLevelResult.cs`
+- Create: `backend/Synapse.Blocks.Api/Students/StudentNameNormalizer.cs`
+- Create: `backend/Synapse.Blocks.Api/Students/AttemptService.cs`
+- Create: `backend/Synapse.Blocks.Api/Students/ProgramEvaluationService.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/StudentAttemptEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Contracts/Students/` request and response DTOs
+- Modify: `backend/Synapse.Blocks.Api/Data/AppDbContext.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Students/AttemptLifecycleTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Students/HiddenTestPrivacyTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Students/ProgressMonotonicityTests.cs`
@@ -205,11 +206,11 @@
 ### Task 7: Implement owner-scoped reports, complete migrations, and API verification
 
 **Files:**
-- Create: `src/Synapse.Blocks.Api/Reports/CaseReportService.cs`
-- Create: `src/Synapse.Blocks.Api/Endpoints/TeacherReportEndpoints.cs`
-- Create: `src/Synapse.Blocks.Api/Contracts/Reports/CaseReportDto.cs`
-- Create: `src/Synapse.Blocks.Api/Operations/CaseArchiveService.cs`
-- Modify: `src/Synapse.Blocks.Api/Data/Migrations/`
+- Create: `backend/Synapse.Blocks.Api/Reports/CaseReportService.cs`
+- Create: `backend/Synapse.Blocks.Api/Endpoints/TeacherReportEndpoints.cs`
+- Create: `backend/Synapse.Blocks.Api/Contracts/Reports/CaseReportDto.cs`
+- Create: `backend/Synapse.Blocks.Api/Operations/CaseArchiveService.cs`
+- Modify: `backend/Synapse.Blocks.Api/Data/Migrations/`
 - Create: `tests/Synapse.Blocks.Api.Tests/Reports/BestProgressTests.cs`
 - Create: `tests/Synapse.Blocks.Api.Tests/Reports/ReportOwnershipTests.cs`
 - Modify: `README.md`

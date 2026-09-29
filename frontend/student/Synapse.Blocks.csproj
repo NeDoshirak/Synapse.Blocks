@@ -21,4 +21,8 @@
     <Folder Include="Data\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../shared/Synapse.Blocks.Core/Synapse.Blocks.Core.csproj" />
+  </ItemGroup>
+
 </Project>

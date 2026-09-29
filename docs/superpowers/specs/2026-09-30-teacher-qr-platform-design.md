@@ -35,13 +35,13 @@ Turn Synapse Blocks from a static Blazor game into a teacher-managed platform. T
 
 ### Applications and runtime
 
-- **Teacher application:** React with Refine, used for sign-in, level authoring, case assembly, QR management, and results.
-- **Student application:** the current Blazor WebAssembly game, adapted to load published case content and submit progress through the API.
-- **Backend:** ASP.NET Core Web API owns authentication, authorization, content validation, QR resolution, attempt lifecycle, persistence, and reporting.
-- **Shared game domain:** extract the block-program model and execution/evaluation rules into a C# library that can be used by both the Blazor game and API, avoiding divergent evaluator implementations.
+- **Teacher application:** `frontend/teacher`, a React/Refine app for sign-in, level authoring, case assembly, QR management, and results. It runs in its own container.
+- **Student application:** `frontend/student`, the current Blazor WebAssembly game, adapted to load published case content and submit progress through the API. It runs in its own container.
+- **Backend:** `backend/Synapse.Blocks.Api`, an ASP.NET Core Web API that owns authentication, authorization, content validation, QR resolution, attempt lifecycle, persistence, and reporting. It runs in its own container.
+- **Shared game domain:** `shared/Synapse.Blocks.Core` contains the block-program model and execution/evaluation rules used by both Blazor and the API, avoiding divergent evaluator implementations.
 - **Database:** PostgreSQL stores identities, teacher-owned content, immutable content versions, QR links, participants, and attempts.
-- **Local deployment:** Docker Compose starts the application stack and PostgreSQL. PostgreSQL data uses a named persistent volume. Runtime secrets and database settings come from environment configuration and are not committed.
-- **Routing:** serve teacher app, student app, and API under one origin (for example `/admin`, `/game`, and `/api`) to simplify cookie-based authentication and avoid exposing credentials to JavaScript storage.
+- **Local deployment:** Docker Compose runs separate `teacher-frontend`, `student-frontend`, `api`, `postgres`, and `gateway` containers. PostgreSQL data uses a named persistent volume. Runtime secrets and database settings come from environment configuration and are not committed.
+- **Routing:** an Nginx gateway routes `/admin/*` to the teacher container, `/api/*` to the API container, and student routes including `/case/*` and `/game` to the Blazor container. This keeps all apps under one origin for cookie authentication.
 
 ### Authentication and ownership
 
@@ -126,7 +126,7 @@ Student operations include case resolution by token, participant/attempt creatio
 
 ### Phase 1: hosted platform foundation
 
-- Establish solution boundaries for ASP.NET Core API, current Blazor student app, and Refine teacher app.
+- Establish separate `frontend/`, `backend/`, and `shared/` project folders and Docker build contexts for ASP.NET Core API, current Blazor student app, and Refine teacher app.
 - Add PostgreSQL persistence and Docker Compose configuration.
 - Implement Identity, invitation provisioning, owner-scoped data access, and migrations.
 - Move level catalog access behind the API and preserve existing game behavior.
@@ -152,7 +152,7 @@ The phases are implementation sequencing, not separate product definitions: comp
 6. The teacher can see all attempts and the maximum number of completed levels for each normalized name and case.
 7. Editing a level or case does not silently alter a running or historical attempt.
 8. Revoking a QR link blocks new access while preserving historical results.
-9. Docker Compose starts the application and PostgreSQL with persistent database storage and environment-based configuration.
+9. Docker Compose starts separate teacher frontend, student frontend, API, PostgreSQL, and gateway containers with persistent database storage and environment-based configuration.
 10. Existing block-program functionality remains available in the student experience.
 
 ## Verification approach
