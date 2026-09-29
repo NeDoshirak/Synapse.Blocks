@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Auth;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Endpoints;
+using Synapse.Blocks.Api.Levels;
 
 var builder = WebApplication.CreateBuilder(args);
 var secureCookies = builder.Configuration.GetValue<bool?>("Cookie:Secure") ?? builder.Environment.IsProduction();
@@ -49,6 +50,8 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddSingleton<LevelDefinitionValidator>();
+builder.Services.AddScoped<LevelService>();
 builder.Services.AddHostedService<BootstrapPlatformAdmin>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "postgres");
@@ -64,6 +67,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 app.MapAuthEndpoints();
 app.MapPlatformAdminEndpoints();
+app.MapTeacherLevelEndpoints();
 
 app.Run();
 

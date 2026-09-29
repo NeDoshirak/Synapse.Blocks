@@ -23,7 +23,8 @@ public sealed class BootstrapPlatformAdmin(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.EnsureCreatedAsync(cancellationToken);
+        await BaselineLegacyDevelopmentSchemaAsync(db, cancellationToken);
+        await db.Database.MigrateAsync(cancellationToken);
         var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         foreach (var role in new[] { PlatformAdminRole, TeacherRole })
             if (!await roles.RoleExistsAsync(role))
@@ -42,4 +43,49 @@ public sealed class BootstrapPlatformAdmin(
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private static async Task BaselineLegacyDevelopmentSchemaAsync(AppDbContext db, CancellationToken cancellationToken)
+    {
+        var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var check = connection.CreateCommand();
+            check.CommandText = "SELECT to_regclass('public.\"AspNetUsers\"') IS NOT NULL AND to_regclass('public.\"__EFMigrationsHistory\"') IS NULL";
+            if (await check.ExecuteScalarAsync(cancellationToken) is not true) return;
+
+            await using var baseline = connection.CreateCommand();
+            baseline.CommandText = """
+                ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "StarterLevelsSeededAt" timestamp with time zone NULL;
+                ALTER TABLE level_versions ADD COLUMN IF NOT EXISTS "Title" character varying(200) NOT NULL DEFAULT '';
+                CREATE TABLE IF NOT EXISTS teacher_levels (
+                    "Id" uuid NOT NULL PRIMARY KEY,
+                    "OwnerId" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE RESTRICT,
+                    "Title" character varying(200) NOT NULL,
+                    "CurrentVersionId" uuid NULL REFERENCES level_versions("Id") ON DELETE RESTRICT,
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    "UpdatedAt" timestamp with time zone NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS "IX_teacher_levels_OwnerId" ON teacher_levels ("OwnerId");
+                CREATE INDEX IF NOT EXISTS "IX_teacher_levels_CurrentVersionId" ON teacher_levels ("CurrentVersionId");
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_level_versions_teacher_levels_LevelId') THEN
+                        ALTER TABLE level_versions ADD CONSTRAINT "FK_level_versions_teacher_levels_LevelId"
+                            FOREIGN KEY ("LevelId") REFERENCES teacher_levels("Id") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+                CREATE TABLE "__EFMigrationsHistory" (
+                    "MigrationId" character varying(150) NOT NULL PRIMARY KEY,
+                    "ProductVersion" character varying(32) NOT NULL
+                );
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                    VALUES ('20260929202020_InitialPlatform', '10.0.9');
+                """;
+            await baseline.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            await connection.CloseAsync();
+        }
+    }
 }

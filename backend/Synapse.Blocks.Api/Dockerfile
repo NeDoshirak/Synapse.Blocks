@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY backend/Synapse.Blocks.Api/ backend/Synapse.Blocks.Api/
 COPY shared/Synapse.Blocks.Core/ shared/Synapse.Blocks.Core/
+COPY frontend/student/wwwroot/levels.json frontend/student/wwwroot/levels.json
 RUN dotnet publish backend/Synapse.Blocks.Api/Synapse.Blocks.Api.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

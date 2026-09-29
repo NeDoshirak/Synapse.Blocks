@@ -16,4 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../../shared/Synapse.Blocks.Core/Synapse.Blocks.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../../frontend/student/wwwroot/levels.json" Link="levels.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

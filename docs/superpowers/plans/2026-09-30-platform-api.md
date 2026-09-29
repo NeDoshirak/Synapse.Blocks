@@ -131,12 +131,12 @@
 - Update request body is `{ expectedVersionId, definition }`; return HTTP 409 without mutation if the current version differs.
 - Updating creates the next immutable version; all definitions pass `LevelDefinitionValidator` before publication.
 
-- [ ] **Step 1: Write failing level tests** for valid creation, invalid definition rejection, version increments, stale-version HTTP 409 without mutation, and cross-owner GET/PUT returning not-found without mutation.
-- [ ] **Step 2: Run the focused level tests** and confirm the routes/handlers do not exist.
-- [ ] **Step 3: Implement entities, validator, service, routes, and the first EF migration.** Preserve all fields in `LevelDefinition`, `LevelIntroStep`, and `LevelTestCase` through the serialized version snapshot.
-- [ ] **Step 4: Seed existing `frontend/student/wwwroot/levels.json` entries as reusable starter definitions** that are copied into a teacher's catalog on first access; starter entries are templates, not shared editable ownerless rows.
-- [ ] **Step 5: Run level and migration tests**; assert a foreign owner cannot read or change the definition, including by supplying a version ID directly.
-- [ ] **Step 6: Commit** level authoring APIs and version storage.
+- [x] **Step 1: Write failing level tests** for valid creation, invalid definition rejection, version increments, stale-version HTTP 409 without mutation, and cross-owner GET/PUT returning not-found without mutation.
+- [x] **Step 2: Run the focused level tests** and confirm the routes/handlers do not exist.
+- [x] **Step 3: Implement entities, validator, service, routes, and the first EF migration.** Preserve all fields in `LevelDefinition`, `LevelIntroStep`, and `LevelTestCase` through the serialized version snapshot.
+- [x] **Step 4: Seed existing `frontend/student/wwwroot/levels.json` entries as reusable starter definitions** that are copied into a teacher's catalog on first access; starter entries are templates, not shared editable ownerless rows.
+- [x] **Step 5: Run level and migration tests**; assert a foreign owner cannot read or change the definition, including by supplying a version ID directly.
+- [x] **Step 6: Commit** level authoring APIs and version storage.
 
 ### Task 5: Implement ordinary cases and QR share-link lifecycle
 

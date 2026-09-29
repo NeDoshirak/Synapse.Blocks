@@ -5,4 +5,5 @@ namespace Synapse.Blocks.Api.Auth;
 public sealed class ApplicationUser : IdentityUser
 {
     public string DisplayName { get; set; } = "";
+    public DateTimeOffset? StarterLevelsSeededAt { get; set; }
 }
