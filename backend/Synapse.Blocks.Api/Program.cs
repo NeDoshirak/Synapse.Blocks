@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Auth;
+using Synapse.Blocks.Api.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Endpoints;
 using Synapse.Blocks.Api.Levels;
@@ -52,6 +53,8 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddSingleton<LevelDefinitionValidator>();
 builder.Services.AddScoped<LevelService>();
+builder.Services.AddScoped<CaseService>();
+builder.Services.AddScoped<ShareLinkService>();
 builder.Services.AddHostedService<BootstrapPlatformAdmin>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "postgres");
@@ -68,6 +71,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapAuthEndpoints();
 app.MapPlatformAdminEndpoints();
 app.MapTeacherLevelEndpoints();
+app.MapTeacherCaseEndpoints();
+app.MapStudentCaseEndpoints();
 
 app.Run();
 

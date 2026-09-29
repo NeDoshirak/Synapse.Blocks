@@ -24,6 +24,7 @@ services:
       BootstrapAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL in .env}
       BootstrapAdmin__Password: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env}
       Cookie__Secure: ${COOKIE_SECURE:-true}
+      PublicOrigin: ${PUBLIC_ORIGIN:-http://localhost:8080}
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-synapse};Username=${POSTGRES_USER:-synapse};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     depends_on:
       postgres:

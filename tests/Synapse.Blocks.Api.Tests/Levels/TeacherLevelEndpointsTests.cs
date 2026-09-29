@@ -81,30 +81,7 @@ public sealed partial class TeacherLevelEndpointsTests(PostgreSqlFixture databas
     }
 
     private async Task<HttpClient> CreateTeacherClientAsync()
-    {
-        using var admin = _factory.CreateClient(new() { HandleCookies = true });
-        var csrf = await admin.GetFromJsonAsync<CsrfDto>("/api/auth/csrf");
-        admin.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.RequestToken);
-        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/auth/sign-in", new { email = "admin@example.test", password = "Admin-password-123!" })).StatusCode);
-        csrf = await admin.GetFromJsonAsync<CsrfDto>("/api/auth/csrf");
-        admin.DefaultRequestHeaders.Remove("RequestVerificationToken");
-        admin.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.RequestToken);
-        var email = $"teacher-{Guid.NewGuid():N}@example.test";
-        var issued = await admin.PostAsJsonAsync("/api/platform/invitations", new { email });
-        var invitation = await issued.Content.ReadFromJsonAsync<InvitationDto>();
-        csrf = await admin.GetFromJsonAsync<CsrfDto>("/api/auth/csrf");
-        admin.DefaultRequestHeaders.Remove("RequestVerificationToken");
-        admin.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.RequestToken);
-        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/platform/invitations/accept", new { token = invitation!.Token, password = "Teacher-password-123!" })).StatusCode);
-        var teacher = _factory.CreateClient(new() { HandleCookies = true });
-        csrf = await teacher.GetFromJsonAsync<CsrfDto>("/api/auth/csrf");
-        teacher.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.RequestToken);
-        Assert.Equal(HttpStatusCode.OK, (await teacher.PostAsJsonAsync("/api/auth/sign-in", new { email, password = "Teacher-password-123!" })).StatusCode);
-        csrf = await teacher.GetFromJsonAsync<CsrfDto>("/api/auth/csrf");
-        teacher.DefaultRequestHeaders.Remove("RequestVerificationToken");
-        teacher.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.RequestToken);
-        return teacher;
-    }
+        => await TeacherTestClients.CreateAsync(_factory);
 
     private static LevelDefinition Definition(string title) => new()
     {
@@ -112,7 +89,5 @@ public sealed partial class TeacherLevelEndpointsTests(PostgreSqlFixture databas
         Tests = [new LevelTestCase { Name = "identity", Input = "1", ExpectedOutput = "1" }]
     };
 
-    private sealed record CsrfDto(string RequestToken);
-    private sealed record InvitationDto(string Token);
     public void Dispose() => _factory.Dispose();
 }

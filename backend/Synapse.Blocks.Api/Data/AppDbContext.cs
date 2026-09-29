@@ -10,6 +10,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<LevelVersionEntity> LevelVersions => Set<LevelVersionEntity>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TeacherLevel> TeacherLevels => Set<TeacherLevel>();
+    public DbSet<TeacherCase> TeacherCases => Set<TeacherCase>();
+    public DbSet<CaseLevel> CaseLevels => Set<CaseLevel>();
+    public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,5 +40,29 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         invitation.Property(item => item.Email).HasMaxLength(256).IsRequired();
         invitation.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
         invitation.Property(item => item.InvitedByUserId).IsRequired();
+
+        var teacherCase = modelBuilder.Entity<TeacherCase>();
+        teacherCase.ToTable("teacher_cases");
+        teacherCase.HasKey(item => item.Id);
+        teacherCase.HasIndex(item => item.OwnerId);
+        teacherCase.Property(item => item.CaseType).HasMaxLength(40).IsRequired();
+        teacherCase.Property(item => item.Title).HasMaxLength(200).IsRequired();
+        teacherCase.Property(item => item.Description).HasMaxLength(2000).IsRequired();
+        teacherCase.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        teacherCase.HasMany(item => item.Levels).WithOne(level => level.Case).HasForeignKey(level => level.CaseId).OnDelete(DeleteBehavior.Restrict);
+        teacherCase.HasMany(item => item.ShareLinks).WithOne(link => link.Case).HasForeignKey(link => link.CaseId).OnDelete(DeleteBehavior.Restrict);
+
+        var caseLevel = modelBuilder.Entity<CaseLevel>();
+        caseLevel.ToTable("case_levels");
+        caseLevel.HasKey(item => item.Id);
+        caseLevel.HasIndex(item => new { item.CaseId, item.Order }).IsUnique();
+        caseLevel.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
+
+        var shareLink = modelBuilder.Entity<ShareLink>();
+        shareLink.ToTable("share_links");
+        shareLink.HasKey(item => item.Id);
+        shareLink.HasIndex(item => item.TokenHash).IsUnique();
+        shareLink.HasIndex(item => item.CaseId).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+        shareLink.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
     }
 }

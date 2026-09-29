@@ -165,12 +165,12 @@
 - Store `caseType: "orderedLevels"` as a discriminator in persistence and teacher/student DTOs; accept only this type in the first release.
 - A case contains 1–100 levels. A level definition request is limited to 5 MiB; an evaluation request is limited to 256 KiB, 500 nodes, and 1,000 connections. Reject over-limit requests before execution with HTTP 413 or a field validation response.
 
-- [ ] **Step 1: Write failing case tests** for ordered level selection, empty case rejection, the 1–100 level bound, pinned version IDs, ownership checks on every operation, archiving with preserved results, QR token unguessability/one-time display, and revocation/rotation.
-- [ ] **Step 2: Run focused case tests** and confirm the route set is absent.
-- [ ] **Step 3: Implement case services and routes** with owner-filtered queries and explicit publication state.
-- [ ] **Step 4: Implement token generation and resolution** using at least 256 random bits and stored hashes; revoked, unknown, and unpublished cases all return the same public unavailable response.
-- [ ] **Step 5: Run case and QR tests**; confirm historical case results are not deleted when the share link is deactivated.
-- [ ] **Step 6: Commit** case composition and QR access.
+- [x] **Step 1: Write failing case tests** for ordered level selection, empty case rejection, the 1–100 level bound, pinned version IDs, ownership checks on every operation, archiving with preserved case content, QR token unguessability/one-time display, and revocation/rotation.
+- [x] **Step 2: Run focused case tests** and confirm the route set is absent.
+- [x] **Step 3: Implement case services and routes** with owner-filtered queries and explicit publication state.
+- [x] **Step 4: Implement token generation and resolution** using at least 256 random bits and stored hashes; revoked, unknown, and unpublished cases all return the same public unavailable response.
+- [x] **Step 5: Run case and QR tests**; confirm case content remains after the share link is deactivated. Attempt-history retention is verified after attempts are implemented in Task 6.
+- [x] **Step 6: Commit** case composition and QR access.
 
 ### Task 6: Implement student participants, attempts, and authoritative evaluation
 
