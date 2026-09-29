@@ -9,13 +9,13 @@
             <span class="brand-mark" aria-hidden="true"></span>
             <span><b>СИНАПС</b></span>
         </a>
-        <NavMenu />
-        <button type="button"
+        @if (!IsCaseMode) { <NavMenu /> }
+        @if (!IsCaseMode) { <button type="button"
                 class="runtime-badge player-reset"
                 disabled="@_resetting"
                 @onclick="ResetPlayerAsync">
             <i></i> @(_resetting ? "Сброс…" : "Сбросить прогресс")
-        </button>
+        </button> }
     </header>
     <main class="app-main">
         @Body
@@ -24,6 +24,8 @@
 
 @code {
     private bool _resetting;
+    private bool IsCaseMode => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("case/", StringComparison.OrdinalIgnoreCase)
+        || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("game?case=", StringComparison.OrdinalIgnoreCase);
 
     private async Task ResetPlayerAsync()
     {

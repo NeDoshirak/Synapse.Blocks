@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="frontend/student/Synapse.Blocks.csproj" />
+  <Project Path="tests/Synapse.Blocks.Student.Tests/Synapse.Blocks.Student.Tests.csproj" />
   <Project Path="shared/Synapse.Blocks.Core/Synapse.Blocks.Core.csproj" />
   <Project Path="tests/Synapse.Blocks.Core.Tests/Synapse.Blocks.Core.Tests.csproj" />
   <Project Path="backend/Synapse.Blocks.Api/Synapse.Blocks.Api.csproj" />

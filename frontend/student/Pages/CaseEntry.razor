@@ -1,0 +1,91 @@
+@page "/case/{Token}"
+@using Synapse.Blocks.Models
+@inject StudentCaseStore Cases
+@inject NavigationManager Navigation
+@inject ILogger<CaseEntry> Logger
+
+<PageTitle>Войти в набор · Синапс</PageTitle>
+<main class="case-entry-shell">
+    @if (_loading)
+    {
+        <section class="case-entry-card"><span class="case-entry-eyebrow">СИНАПС · УЧЕБНЫЙ МАРШРУТ</span><h1>Открываем задание…</h1><div class="case-entry-loader"></div></section>
+    }
+    else if (_unavailable)
+    {
+        <section class="case-entry-card"><span class="case-entry-icon">↗</span><span class="case-entry-eyebrow">ССЫЛКА НАБОР</span><h1>Набор недоступен</h1><p>Попросите учителя проверить QR-код или выдать новую ссылку.</p></section>
+    }
+    else if (_case is not null)
+    {
+        <section class="case-entry-card">
+            <span class="case-entry-eyebrow">СИНАПС · УЧЕБНЫЙ МАРШРУТ</span>
+            <div class="case-entry-icon">✳</div>
+            <h1>@_case.Title</h1>
+            <p>В наборе @_case.Levels.Count @(LevelWord(_case.Levels.Count)). Введите своё имя, чтобы начать.</p>
+            @if (!string.IsNullOrEmpty(_error)) { <div class="case-entry-error" role="alert">@_error</div> }
+            <form @onsubmit="StartAsync" @onsubmit:preventDefault>
+                <label for="student-name">Ваше имя</label>
+                <input id="student-name" @bind="_displayName" maxlength="80" autocomplete="name" placeholder="Например, Аня" disabled="_starting" />
+                <button class="case-entry-submit" type="submit" disabled="_starting || string.IsNullOrWhiteSpace(_displayName)">@(_starting ? "Начинаем…" : "Начать набор") <span aria-hidden="true">→</span></button>
+            </form>
+            <button class="case-entry-resume" type="button" @onclick="ResumeAsync" disabled="_starting">Продолжить незавершённую попытку</button>
+            <div class="case-entry-privacy">Имя нужно учителю, чтобы показать ваш прогресс. Аккаунт не требуется.</div>
+        </section>
+    }
+</main>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+    private StudentCaseDto? _case;
+    private string _displayName = "";
+    private string _error = "";
+    private bool _loading = true;
+    private bool _unavailable;
+    private bool _starting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true; _unavailable = false; _error = "";
+        try { _case = await Cases.LoadAsync(Token); }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException)
+        {
+            _unavailable = true;
+            Logger.LogInformation("Student opened an unavailable case link.");
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task StartAsync()
+    {
+        _error = "";
+        try
+        {
+            _starting = true;
+            var attempt = await Cases.StartAsync(Token, _displayName);
+            Navigate(attempt);
+        }
+        catch (ArgumentException ex) { _error = ex.Message; }
+        catch (HttpRequestException)
+        {
+            _unavailable = true;
+            _error = "Не удалось начать попытку. Обновите страницу и проверьте QR-код.";
+        }
+        finally { _starting = false; }
+    }
+
+    private async Task ResumeAsync()
+    {
+        _error = "";
+        try
+        {
+            _starting = true;
+            var attempt = await Cases.ResumeAsync(Token);
+            if (attempt is null) { _error = "Незавершённая попытка не найдена. Введите имя, чтобы начать."; return; }
+            Navigate(attempt);
+        }
+        catch (HttpRequestException) { _error = "Не удалось продолжить. Проверьте соединение и попробуйте ещё раз."; }
+        finally { _starting = false; }
+    }
+
+    private void Navigate(StudentAttemptDto attempt) => Navigation.NavigateTo($"/game?case={Uri.EscapeDataString(Token)}&attempt={attempt.AttemptId}");
+    private static string LevelWord(int count) => count switch { 1 => "уровень", 2 or 3 or 4 => "уровня", _ => "уровней" };
+}
