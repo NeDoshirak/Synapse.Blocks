@@ -24,10 +24,10 @@
             @if (!string.IsNullOrEmpty(_error)) { <div class="case-entry-error" role="alert">@_error</div> }
             <form @onsubmit="StartAsync" @onsubmit:preventDefault>
                 <label for="student-name">Ваше имя</label>
-                <input id="student-name" @bind="_displayName" maxlength="80" autocomplete="name" placeholder="Например, Аня" disabled="_starting" />
-                <button class="case-entry-submit" type="submit" disabled="_starting || string.IsNullOrWhiteSpace(_displayName)">@(_starting ? "Начинаем…" : "Начать набор") <span aria-hidden="true">→</span></button>
+                <input id="student-name" @bind="_displayName" maxlength="80" autocomplete="name" placeholder="Например, Аня" disabled="@_starting" />
+                <button class="case-entry-submit" type="submit" disabled="@(_starting || string.IsNullOrWhiteSpace(_displayName))">@(_starting ? "Начинаем…" : "Начать набор") <span aria-hidden="true">→</span></button>
             </form>
-            <button class="case-entry-resume" type="button" @onclick="ResumeAsync" disabled="_starting">Продолжить незавершённую попытку</button>
+            <button class="case-entry-resume" type="button" @onclick="ResumeAsync" disabled="@_starting">Продолжить незавершённую попытку</button>
             <div class="case-entry-privacy">Имя нужно учителю, чтобы показать ваш прогресс. Аккаунт не требуется.</div>
         </section>
     }
