@@ -4,7 +4,7 @@ import { LevelDefinitionForm } from "../../components/levels/LevelDefinitionForm
 import { apiClient } from "../../providers/apiClient";
 import type { TeacherLevel } from "../../types/api";
 
-const level: TeacherLevel = { id:"l1",title:"Первый",currentVersionId:"v1",version:1,definition:{id:"l1",title:"Первый",description:"",objective:"",allowedBlocks:[0,1],requiredBlocks:[],tests:[{id:"t1",name:"Видимый",input:"1",expectedOutput:"1",hidden:false},{id:"t2",name:"Скрытый",input:"9",expectedOutput:"secret",hidden:true}],introSteps:[]} };
+const level: TeacherLevel = { id:"l1",title:"Первый",currentVersionId:"v1",version:1,definition:{id:"l1",title:"Первый",description:"",objective:"",allowedBlocks:["Input","Operation"],requiredBlocks:[],tests:[{id:"t1",name:"Видимый",input:"1",expectedOutput:"1",hidden:false},{id:"t2",name:"Скрытый",input:"9",expectedOutput:"secret",hidden:true}],introSteps:[]} };
 afterEach(()=>{vi.restoreAllMocks();apiClient.invalidateCsrf();});
 
 describe("level editor recovery",()=>{

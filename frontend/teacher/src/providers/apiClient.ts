@@ -21,7 +21,8 @@ export function createApiClient() {
       const body = await response.json().catch(() => undefined);
       if (!response.ok) {
         if (response.status === 401) requestToken = undefined;
-        throw Object.assign(new Error(body?.message ?? body?.title ?? `Ошибка запроса (${response.status})`), { statusCode: response.status, errors: body?.errors });
+        const validation = body?.errors ? Object.entries(body.errors as Record<string, string[]>).map(([field, messages]) => `${field}: ${messages.join(" ")}`).join(" ") : undefined;
+        throw Object.assign(new Error(body?.message ?? body?.error ?? validation ?? body?.title ?? `Ошибка запроса (${response.status})`), { statusCode: response.status, errors: body?.errors });
       }
       return body;
     },

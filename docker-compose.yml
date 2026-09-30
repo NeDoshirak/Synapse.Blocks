@@ -31,6 +31,29 @@ services:
         condition: service_healthy
     ports:
       - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8081}:8080"
+  teacher:
+    build:
+      context: .
+      dockerfile: frontend/teacher/Dockerfile
+    restart: unless-stopped
+
+  student:
+    build:
+      context: .
+      dockerfile: frontend/student/Dockerfile
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+      - teacher
+      - student
 
 volumes:
   synapse-postgres-data:
