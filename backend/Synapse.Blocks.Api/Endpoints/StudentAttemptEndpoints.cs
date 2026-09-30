@@ -9,7 +9,7 @@ namespace Synapse.Blocks.Api.Endpoints;
 
 public static class StudentAttemptEndpoints
 {
-    private const string ContinuationCookie = "synapse.student.continuation";
+    private const string ContinuationCookie = "synapse.student.continuation.v2";
 
     public static IEndpointRouteBuilder MapStudentAttemptEndpoints(this IEndpointRouteBuilder app)
     {
@@ -35,7 +35,7 @@ public static class StudentAttemptEndpoints
                 HttpOnly = true,
                 SameSite = SameSiteMode.Strict,
                 Secure = configuration.GetValue<bool?>("Cookie:Secure") ?? context.Request.IsHttps,
-                Path = "/api/student",
+                Path = $"/api/student/cases/{token}",
                 MaxAge = TimeSpan.FromDays(90)
             });
             return Results.Created($"/api/student/cases/{token}/participants/{participant.Value.Participant.ParticipantId}", participant.Value.Participant);

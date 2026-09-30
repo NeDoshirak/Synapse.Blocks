@@ -5,6 +5,7 @@ export const authProvider = {
   login: async ({ email, password }: { email: string; password: string }) => {
     try {
       await apiClient.request("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ email, password }) });
+      apiClient.invalidateCsrf();
       return { success: true, redirectTo: "/" };
     } catch { return { success: false, error: new Error("Проверьте почту и пароль") }; }
   },

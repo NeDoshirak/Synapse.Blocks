@@ -65,7 +65,7 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
             result.LastSubmittedAt = DateTimeOffset.UtcNow;
         }
 
-        if (passed && completedLevelCount + 1 == orderedLevels.Length)
+        if (passed && levelIndex == completedLevelCount && completedLevelCount + 1 == orderedLevels.Length)
         {
             attempt.Status = "Completed";
             attempt.CompletedAt ??= DateTimeOffset.UtcNow;
