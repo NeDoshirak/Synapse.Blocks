@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-synapse}
       POSTGRES_USER: ${POSTGRES_USER:-synapse}
@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: backend/Synapse.Blocks.Api/Dockerfile
-    restart: unless-stopped
+    restart: always
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       BootstrapAdmin__Email: ${BOOTSTRAP_ADMIN_EMAIL:?Set BOOTSTRAP_ADMIN_EMAIL in .env}
@@ -35,19 +35,19 @@ services:
     build:
       context: .
       dockerfile: frontend/teacher/Dockerfile
-    restart: unless-stopped
+    restart: always
 
   student:
     build:
       context: .
       dockerfile: frontend/student/Dockerfile
-    restart: unless-stopped
+    restart: always
 
   gateway:
     build:
       context: .
       dockerfile: deploy/gateway/Dockerfile
-    restart: unless-stopped
+    restart: always
     ports:
       - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:80"
     depends_on:

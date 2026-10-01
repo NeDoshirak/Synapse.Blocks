@@ -29,6 +29,8 @@ docker compose up --build -d
 
 PostgreSQL доступен только внутри Docker-сети и хранит данные в томе `synapse-postgres-data`. API, админка, игра, база и gateway работают в отдельных контейнерах. `http://localhost:8080/health/ready` сообщает о готовности API и миграций базы. Обычная команда `docker compose down` останавливает контейнеры и сохраняет данные; для запуска снова используйте `docker compose up -d`.
 
+У контейнеров настроен `restart: always`: Docker автоматически поднимет весь стек, когда Docker Engine запустится. Сам Docker Desktop на macOS должен быть запущен; включите его запуск при входе в настройки Docker Desktop.
+
 В production задайте `PUBLIC_ORIGIN` равным внешнему HTTPS-адресу и включите `COOKIE_SECURE=true`. Если меняете `WEB_PORT`, обновите `PUBLIC_ORIGIN`, чтобы QR-ссылки указывали на правильный адрес. Секреты из `.env` не добавляйте в Git.
 
 ## Работа учителя и ученика
