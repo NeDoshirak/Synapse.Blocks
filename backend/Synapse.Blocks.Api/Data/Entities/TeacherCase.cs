@@ -15,5 +15,6 @@ public sealed class TeacherCase
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<CaseLevel> Levels { get; set; } = [];
+    public List<CaseSection> Sections { get; set; } = [];
     public List<ShareLink> ShareLinks { get; set; } = [];
 }

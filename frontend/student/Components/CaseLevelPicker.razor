@@ -1,0 +1,243 @@
+@using Synapse.Blocks.Models
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<div class="case-level-picker" @ref="_root">
+    <button type="button"
+            class="case-level-picker__trigger"
+            aria-haspopup="listbox"
+            aria-expanded="@_open.ToString().ToLowerInvariant()"
+            aria-controls="@_listId"
+            aria-label="@TriggerLabel"
+            title="@TriggerLabel"
+            @ref="_trigger"
+            @onclick="Toggle">
+        @if (SelectedItem is { } selected)
+        {
+            <span class="case-level-picker__status" aria-hidden="true">@(selected.IsCompleted ? "✓" : "○")</span>
+            <span class="case-level-picker__current">@selected.Order.ToString("00") · @selected.DisplayTitle</span>
+        }
+        else
+        {
+            <span class="case-level-picker__current">Выбрать задание</span>
+        }
+        <span class="case-level-picker__chevron" aria-hidden="true">⌄</span>
+    </button>
+
+    @if (_open)
+    {
+        <div class="case-level-picker__menu"
+             id="@_listId"
+             role="listbox"
+             aria-label="Задания набора"
+             aria-activedescendant="@ActiveOptionId"
+             tabindex="0"
+             @onkeydown="HandleKeyDown"
+             @ref="_menu">
+            @foreach (var group in Groups)
+            {
+                <div class="case-level-picker__group" role="group" aria-label="@(string.IsNullOrWhiteSpace(group.Title) ? "Задания без раздела" : group.Title)">
+                    @if (!string.IsNullOrWhiteSpace(group.Title))
+                    {
+                        <div class="case-level-picker__group-title">@group.Title</div>
+                    }
+                    @foreach (var item in group.Items)
+                    {
+                        var index = IndexOf(item.LevelId);
+                        <div id="@OptionId(index)"
+                             title="@MenuItemLabel(item)"
+                             class="case-level-picker__option @(item.LevelId == SelectedLevelId ? "is-selected" : "") @(item.IsCompleted ? "is-completed" : "") @(item.IsDisabled ? "is-disabled" : "") @(index == _activeIndex ? "is-active" : "")"
+                             role="option"
+                             aria-selected="@(item.LevelId == SelectedLevelId)"
+                             aria-disabled="@item.IsDisabled"
+                             @onpointerenter="() => _activeIndex = index"
+                             @onclick="() => SelectAsync(item)">
+                            <span class="case-level-picker__status" aria-hidden="true">@(item.IsCompleted ? "✓" : "○")</span>
+                            <span class="case-level-picker__option-title">@item.Order.ToString("00") · @item.DisplayTitle</span>
+                            @if (item.LevelId == SelectedLevelId)
+                            {
+                                <span class="case-level-picker__selected-label">ТЕКУЩЕЕ</span>
+                            }
+                            else if (item.IsDisabled)
+                            {
+                                <span class="case-level-picker__locked-label">ЗАКРЫТО</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CaseLevelMenuItem> Items { get; set; } = [];
+    [Parameter] public Guid SelectedLevelId { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+
+    private ElementReference _root;
+    private ElementReference _trigger;
+    private ElementReference _menu;
+    private bool _open;
+    private bool _watchingOutside;
+    private bool _focusMenuAfterRender;
+    private int _lastScrolledIndex = -1;
+    private int _activeIndex = -1;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<CaseLevelPicker>? _self;
+    private readonly string _listId = $"case-level-picker-{Guid.NewGuid():N}";
+
+    private CaseLevelMenuItem? SelectedItem => Items.FirstOrDefault(item => item.LevelId == SelectedLevelId);
+    private string TriggerLabel => SelectedItem is { } selected
+        ? $"Текущее задание {selected.Order}: {selected.DisplayTitle}. {(selected.IsCompleted ? "Пройдено" : "Не пройдено")}"
+        : "Выбрать задание";
+    private string? ActiveOptionId => _activeIndex >= 0 && _activeIndex < Items.Count ? OptionId(_activeIndex) : null;
+    private IReadOnlyList<MenuGroup> Groups
+    {
+        get
+        {
+            var groups = new List<MenuGroup>();
+            foreach (var item in Items)
+            {
+                var title = string.IsNullOrWhiteSpace(item.SectionTitle) ? null : item.SectionTitle.Trim();
+                if (groups.Count == 0 || groups[^1].SectionOrder != item.SectionOrder || groups[^1].Title != title)
+                    groups.Add(new MenuGroup(item.SectionOrder, title, []));
+                groups[^1].Items.Add(item);
+            }
+            return groups;
+        }
+    }
+
+    private async Task Toggle()
+    {
+        if (_open)
+        {
+            await CloseAsync(false);
+            return;
+        }
+
+        _activeIndex = IndexOf(SelectedLevelId);
+        if (_activeIndex < 0 || Items[_activeIndex].IsDisabled)
+            _activeIndex = FindEnabled(0, 1);
+        _lastScrolledIndex = -1;
+        _open = true;
+        _focusMenuAfterRender = true;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        switch (args.Key)
+        {
+            case "ArrowDown":
+                _activeIndex = FindEnabled(_activeIndex + 1, 1);
+                break;
+            case "ArrowUp":
+                _activeIndex = FindEnabled(_activeIndex - 1, -1);
+                break;
+            case "Home":
+                _activeIndex = FindEnabled(0, 1);
+                break;
+            case "End":
+                _activeIndex = FindEnabled(Items.Count - 1, -1);
+                break;
+            case "Enter":
+            case " ":
+                if (_activeIndex >= 0 && _activeIndex < Items.Count)
+                    await SelectAsync(Items[_activeIndex]);
+                break;
+            case "Escape":
+                await CloseAsync(true);
+                break;
+            case "Tab":
+                await CloseAsync(false);
+                break;
+        }
+    }
+
+    private async Task SelectAsync(CaseLevelMenuItem item)
+    {
+        if (item.IsDisabled) return;
+        await OnSelect.InvokeAsync(item.LevelId);
+        await CloseAsync(true);
+    }
+
+    private int FindEnabled(int start, int direction)
+    {
+        if (Items.Count == 0) return -1;
+        var index = Math.Clamp(start, 0, Items.Count - 1);
+        while (index >= 0 && index < Items.Count)
+        {
+            if (!Items[index].IsDisabled) return index;
+            index += direction;
+        }
+        return _activeIndex >= 0 && _activeIndex < Items.Count ? _activeIndex : -1;
+    }
+
+    private int IndexOf(Guid levelId)
+    {
+        for (var index = 0; index < Items.Count; index++)
+            if (Items[index].LevelId == levelId) return index;
+        return -1;
+    }
+
+    private string OptionId(int index) => $"{_listId}-option-{index}";
+    private static string MenuItemLabel(CaseLevelMenuItem item) => $"{item.Order:00} · {item.DisplayTitle}";
+
+    private async Task CloseAsync(bool returnFocus)
+    {
+        if (!_open) return;
+        _open = false;
+        await InvokeAsync(StateHasChanged);
+        if (returnFocus) await _trigger.FocusAsync();
+    }
+
+    [JSInvokable]
+    public Task CloseFromOutsideAsync() => CloseAsync(false);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_open && _module is null)
+        {
+            var moduleUrl = new Uri(new Uri(Navigation.BaseUri), "js/case-level-picker.js").ToString();
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", moduleUrl);
+        }
+        if (_open && !_watchingOutside && _module is not null)
+        {
+            _self ??= DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("watchOutside", _root, _self);
+            _watchingOutside = true;
+        }
+        if (!_open && _watchingOutside && _module is not null)
+        {
+            await _module.InvokeVoidAsync("stopWatching", _root);
+            _watchingOutside = false;
+        }
+        if (_open && _focusMenuAfterRender)
+        {
+            _focusMenuAfterRender = false;
+            await _menu.FocusAsync();
+        }
+        if (_open && _module is not null && _activeIndex >= 0 && _lastScrolledIndex != _activeIndex)
+        {
+            _lastScrolledIndex = _activeIndex;
+            await _module.InvokeVoidAsync("scrollOptionIntoView", _root, OptionId(_activeIndex));
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("stopWatching", _root);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
+    }
+
+    private sealed record MenuGroup(int? SectionOrder, string? Title, List<CaseLevelMenuItem> Items);
+}

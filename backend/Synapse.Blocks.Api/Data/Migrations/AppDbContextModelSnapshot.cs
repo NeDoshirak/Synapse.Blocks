@@ -271,6 +271,11 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LevelPresentationJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
                     b.Property<string>("LevelVersionIdsJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -335,10 +340,17 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DisplayTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<Guid>("LevelId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("LevelVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SectionId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Order")
@@ -346,12 +358,37 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CaseId");
+
                     b.HasIndex("LevelVersionId");
 
-                    b.HasIndex("CaseId", "Order")
+                    b.HasIndex("SectionId", "Order")
                         .IsUnique();
 
                     b.ToTable("case_levels", (string)null);
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.ToTable("case_sections", (string)null);
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.LevelVersionEntity", b =>
@@ -635,9 +672,30 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.CaseSection", "Section")
+                        .WithMany("Levels")
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Case");
 
                     b.Navigation("LevelVersion");
+
+                    b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseSection", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.TeacherCase", "Case")
+                        .WithMany("Sections")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Case");
+
+                    b.Navigation("Levels");
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.LevelVersionEntity", b =>
@@ -714,6 +772,8 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.TeacherCase", b =>
                 {
+                    b.Navigation("Sections");
+
                     b.Navigation("Levels");
 
                     b.Navigation("ShareLinks");

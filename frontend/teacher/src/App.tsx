@@ -27,11 +27,11 @@ export default function App() {
     { name: "levels", list: "/levels", meta: { label: "Уровни", icon: <BookOutlined /> } },
     { name: "cases", list: "/cases", meta: { label: "Наборы и QR", icon: <QrcodeOutlined /> } },
     { name: "invitations", list: "/invitations", meta: { label: "Приглашения", icon: <UserAddOutlined />, hide: true } },
-  ]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, title: { text: "Synapse Blocks", icon: <AppstoreOutlined /> } }}>
+  ]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, title: { text: "ФВС/Код", icon: <AppstoreOutlined /> } }}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
-      <Route element={<Authenticated key="private" fallback={<CatchAllNavigate to="/login" />}><ThemedLayout Title={() => <Link className="brand" to="/">Synapse Blocks</Link>}><Outlet /></ThemedLayout></Authenticated>}>
+      <Route element={<Authenticated key="private" fallback={<CatchAllNavigate to="/login" />}><ThemedLayout Title={() => <Link className="brand" to="/">ФВС/Код</Link>}><Outlet /></ThemedLayout></Authenticated>}>
         <Route index element={<Dashboard />} />
         <Route path="invitations" element={<InvitationsPage />} />
         <Route path="levels" element={<LevelsList />} />

@@ -37,9 +37,27 @@ public sealed class AttemptService(AppDbContext db)
     {
         var participant = await FindParticipantAsync(caseId, continuationToken, cancellationToken);
         if (participant is null) return null;
-        var levelVersionIds = await db.CaseLevels.AsNoTracking().Where(item => item.CaseId == caseId).OrderBy(item => item.Order).Select(item => item.LevelVersionId).ToListAsync(cancellationToken);
-        if (levelVersionIds.Count == 0) return null;
-        var attempt = new Attempt { CaseId = caseId, ParticipantId = participant.Id, LevelVersionIdsJson = JsonSerializer.Serialize(levelVersionIds) };
+        var caseLevels = await db.CaseLevels.AsNoTracking()
+            .Include(item => item.Section)
+            .Include(item => item.LevelVersion)
+            .Where(item => item.CaseId == caseId)
+            .OrderBy(item => item.Section.Order)
+            .ThenBy(item => item.Order)
+            .ToListAsync(cancellationToken);
+        if (caseLevels.Count == 0) return null;
+        var levelVersionIds = caseLevels.Select(item => item.LevelVersionId).ToList();
+        var presentation = caseLevels.Select(item => new LevelPresentation(
+            item.LevelVersionId,
+            item.Section.Order,
+            item.Section.Title,
+            EffectiveTitle(item.DisplayTitle, item.LevelVersion.Title))).ToArray();
+        var attempt = new Attempt
+        {
+            CaseId = caseId,
+            ParticipantId = participant.Id,
+            LevelVersionIdsJson = JsonSerializer.Serialize(levelVersionIds),
+            LevelPresentationJson = JsonSerializer.Serialize(presentation, JsonOptions)
+        };
         db.Attempts.Add(attempt);
         await db.SaveChangesAsync(cancellationToken);
         return await ToDtoAsync(attempt, 0, cancellationToken);
@@ -77,6 +95,10 @@ public sealed class AttemptService(AppDbContext db)
     private async Task<AttemptDto> ToDtoAsync(Attempt attempt, int completedLevelCount, CancellationToken cancellationToken)
     {
         var versionIds = JsonSerializer.Deserialize<List<Guid>>(attempt.LevelVersionIdsJson) ?? [];
+        var presentation = JsonSerializer.Deserialize<List<LevelPresentation>>(attempt.LevelPresentationJson, JsonOptions) ?? [];
+        var presentationByVersionId = presentation
+            .GroupBy(item => item.LevelVersionId)
+            .ToDictionary(group => group.Key, group => group.First());
         var completedIds = attempt.LevelResults.Where(item => item.Completed).Select(item => item.LevelVersionId).ToHashSet();
         var versions = await db.LevelVersions.Where(item => versionIds.Contains(item.Id)).ToDictionaryAsync(item => item.Id, cancellationToken);
         var levels = new List<StudentCaseLevelDto>(versionIds.Count);
@@ -87,10 +109,22 @@ public sealed class AttemptService(AppDbContext db)
             var definition = JsonSerializer.Deserialize<LevelDefinition>(version.DefinitionJson, JsonOptions)
                 ?? throw new InvalidOperationException("Level version snapshot is invalid.");
             definition.Tests = definition.Tests.Where(test => !test.Hidden).ToList();
-            levels.Add(new StudentCaseLevelDto(versionId, order, definition));
+            presentationByVersionId.TryGetValue(versionId, out var savedPresentation);
+            levels.Add(new StudentCaseLevelDto(
+                versionId,
+                order + 1,
+                savedPresentation?.SectionOrder,
+                savedPresentation?.SectionTitle,
+                EffectiveTitle(savedPresentation?.DisplayTitle, version.Title),
+                definition));
         }
         return new AttemptDto(attempt.Id, attempt.Status, attempt.StartedAt, attempt.CompletedAt, completedLevelCount, versionIds, completedIds.ToArray(), levels);
     }
+
+    private sealed record LevelPresentation(Guid LevelVersionId, int? SectionOrder, string? SectionTitle, string? DisplayTitle);
+
+    private static string EffectiveTitle(string? displayTitle, string canonicalTitle)
+        => string.IsNullOrWhiteSpace(displayTitle) ? canonicalTitle : displayTitle;
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
     private static JsonSerializerOptions CreateJsonOptions()

@@ -12,7 +12,6 @@ builder.Services.AddScoped<LevelStore>();
 builder.Services.AddScoped<ProgressStore>();
 builder.Services.AddScoped<SolutionStore>();
 builder.Services.AddScoped<StudentCaseStore>();
-builder.Services.AddScoped<CitySceneStore>();
 builder.Services.AddSingleton<BlockProgramRunner>();
 
 await builder.Build().RunAsync();

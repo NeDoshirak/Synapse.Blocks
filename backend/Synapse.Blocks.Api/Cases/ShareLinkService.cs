@@ -47,7 +47,7 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
         if (string.IsNullOrWhiteSpace(token) || token.Length != 43) return null;
         var hash = Hash(token);
         var link = await db.ShareLinks.AsNoTracking()
-            .Include(item => item.Case).ThenInclude(item => item.Levels).ThenInclude(level => level.LevelVersion)
+            .Include(item => item.Case).ThenInclude(item => item.Sections).ThenInclude(section => section.Levels).ThenInclude(level => level.LevelVersion)
             .FirstOrDefaultAsync(item => item.TokenHash == hash && item.RevokedAt == null, cancellationToken);
         if (link is null || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(link.TokenHash), Convert.FromHexString(hash))
             || !link.Case.IsPublished || link.Case.Archived)

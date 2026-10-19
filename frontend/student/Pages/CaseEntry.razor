@@ -4,11 +4,11 @@
 @inject NavigationManager Navigation
 @inject ILogger<CaseEntry> Logger
 
-<PageTitle>Войти в набор · Синапс</PageTitle>
+<PageTitle>Войти в набор · ФВС/Код</PageTitle>
 <main class="case-entry-shell">
     @if (_loading)
     {
-        <section class="case-entry-card"><span class="case-entry-eyebrow">СИНАПС · УЧЕБНЫЙ МАРШРУТ</span><h1>Открываем задание…</h1><div class="case-entry-loader"></div></section>
+        <section class="case-entry-card"><span class="case-entry-eyebrow">ФВС/КОД · УЧЕБНЫЙ МАРШРУТ</span><h1>Открываем задание…</h1><div class="case-entry-loader"></div></section>
     }
     else if (_unavailable)
     {
@@ -17,10 +17,10 @@
     else if (_case is not null)
     {
         <section class="case-entry-card">
-            <span class="case-entry-eyebrow">СИНАПС · УЧЕБНЫЙ МАРШРУТ</span>
+            <span class="case-entry-eyebrow">ФВС/КОД · УЧЕБНЫЙ МАРШРУТ</span>
             <div class="case-entry-icon">✳</div>
             <h1>@_case.Title</h1>
-            <p>В наборе @_case.Levels.Count @(LevelWord(_case.Levels.Count)). Введите своё имя, чтобы начать.</p>
+            <p>В наборе @_case.Levels.Count @(AssignmentWord(_case.Levels.Count)). Введите своё имя, чтобы начать.</p>
             @if (!string.IsNullOrEmpty(_error)) { <div class="case-entry-error" role="alert">@_error</div> }
             <form @onsubmit="StartAsync" @onsubmit:preventDefault>
                 <label for="student-name">Ваше имя</label>
@@ -87,5 +87,5 @@
     }
 
     private void Navigate(StudentAttemptDto attempt) => Navigation.NavigateTo($"/game?case={Uri.EscapeDataString(Token)}&attempt={attempt.AttemptId}");
-    private static string LevelWord(int count) => count switch { 1 => "уровень", 2 or 3 or 4 => "уровня", _ => "уровней" };
+    private static string AssignmentWord(int count) => count switch { 1 => "задание", 2 or 3 or 4 => "задания", _ => "заданий" };
 }

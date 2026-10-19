@@ -9,7 +9,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>@(Sandbox ? "Песочница — Синапс" : "Игра — Синапс")</PageTitle>
+<PageTitle>@(Sandbox ? "Песочница — Синапс" : "Игра — ФВС/Код")</PageTitle>
 
 @if (_loading)
 {
@@ -27,7 +27,7 @@ else if (ActiveLevel is null)
         {
         <h1>Уровней пока нет</h1>
         <p>Попросите разработчика добавить первое задание в кампанию.</p>
-        <a class="primary-link" href="">Вернуться в город</a>
+        <a class="primary-link" href="game">Вернуться в игру</a>
         }
     </section>
 }
@@ -35,13 +35,20 @@ else
 {
     <section class="game-toolbar @(IsSandbox ? "sandbox-toolbar" : "child-toolbar")">
         <div>
-                <small>@(IsSandbox ? "ПЕСОЧНИЦА / УРОВЕНЬ" : _caseMode ? "УЧЕБНЫЙ НАБОР / УРОВЕНЬ" : "ТЕКУЩАЯ ОПЕРАЦИЯ")</small>
-            <select value="@ActiveLevel.Id" @onchange="SelectLevel">
-                @foreach (var level in _levels)
-                {
-                    <option value="@level.Id" disabled="@(!CanSelectLevel(level))">@(_completed.Contains(level.Id) ? "✓" : "○") @level.Order.ToString("00") · @level.Title</option>
-                }
-            </select>
+                <small>@(IsSandbox ? "ПЕСОЧНИЦА / УРОВЕНЬ" : _caseMode ? "УЧЕБНЫЙ НАБОР / ЗАДАНИЕ" : "ТЕКУЩАЯ ОПЕРАЦИЯ")</small>
+            @if (_caseMode)
+            {
+                <CaseLevelPicker Items="CaseMenuItems" SelectedLevelId="ActiveLevel.Id" OnSelect="SelectCaseLevel" />
+            }
+            else
+            {
+                <select value="@ActiveLevel.Id" @onchange="SelectLevel">
+                    @foreach (var level in _levels)
+                    {
+                        <option value="@level.Id" disabled="@(!CanSelectLevel(level))">@(_completed.Contains(level.Id) ? "✓" : "○") @level.Order.ToString("00") · @level.Title</option>
+                    }
+                </select>
+            }
         </div>
         <div class="toolbar-stats">
             @if (IsSandbox)
@@ -89,8 +96,8 @@ else
                 else
                 {
                     <span class="direction-pill">@ActiveLevel.Direction</span>
-                    <p class="operation-number">ОПЕРАЦИЯ @ActiveLevel.Order.ToString("00")</p>
-                    <h1>@ActiveLevel.Title</h1>
+                    <p class="operation-number">ОПЕРАЦИЯ @ActiveLevelDisplayOrder.ToString("00")</p>
+                    <h1>@ActiveLevelDisplayTitle</h1>
                     <p class="mission-description">@ActiveLevel.Description</p>
 
                     <details class="story-card child-story-card">
@@ -508,13 +515,13 @@ else
         <div class="level-complete-backdrop" role="presentation">
             <section class="level-complete-modal" role="dialog" aria-modal="true" aria-labelledby="complete-title">
                 <div class="complete-signal"><i></i><i></i><i></i></div>
-                <small>ОПЕРАЦИЯ @ActiveLevel.Order.ToString("00") ЗАВЕРШЕНА</small>
-                <h2 id="complete-title">@ActiveLevel.Title</h2>
+                <small>ОПЕРАЦИЯ @ActiveLevelDisplayOrder.ToString("00") ЗАВЕРШЕНА</small>
+                <h2 id="complete-title">@ActiveLevelDisplayTitle</h2>
                 <p>@ActiveLevel.StorySuccess</p>
                 <div class="complete-stats"><span><b>@_results.Count</b> тестов пройдено</span><span><b>@_program.Nodes.Count</b> блоков в решении</span></div>
                 <div class="complete-actions">
                     <button type="button" class="secondary" @onclick="CloseSuccess">Посмотреть схему</button>
-                    <button type="button" class="primary" @onclick="GoToNextLevel">@(HasNextLevel ? "Следующий уровень →" : _caseMode ? "Завершить набор →" : "Вернуться в город →")</button>
+                    <button type="button" class="primary" @onclick="GoToNextLevel">@(HasNextLevel ? "Следующий уровень →" : _caseMode ? "Завершить набор →" : "Вернуться к уровням →")</button>
                 </div>
             </section>
         </div>
@@ -581,6 +588,7 @@ else
     private Guid? _caseAttemptId;
     private string? _caseToken;
     private Dictionary<Guid, Guid> _caseLevelVersionIds = [];
+    private Dictionary<Guid, StudentCaseLevelDto> _casePresentationByLevelId = [];
     private bool _showSuccess;
     private bool _running;
     private BlockKind? _helpKind;
@@ -638,6 +646,28 @@ else
 
     private LevelDefinition? ActiveLevel => _levels.FirstOrDefault(level => level.Id == _activeLevelId) ?? _levels.FirstOrDefault();
     private bool IsSandbox => Sandbox;
+    private string ActiveLevelDisplayTitle => ActiveLevel is { } level && _casePresentationByLevelId.TryGetValue(level.Id, out var presentation)
+        ? presentation.DisplayTitle
+        : ActiveLevel?.Title ?? "";
+    private int ActiveLevelDisplayOrder => ActiveLevel is { } level && _casePresentationByLevelId.TryGetValue(level.Id, out var presentation)
+        ? presentation.Order
+        : ActiveLevel?.Order ?? 0;
+    private IReadOnlyList<CaseLevelMenuItem> CaseMenuItems => _levels.Select(level =>
+    {
+        _casePresentationByLevelId.TryGetValue(level.Id, out var presentation);
+        var completed = _caseLevelVersionIds.TryGetValue(level.Id, out var versionId)
+            && _completed.Contains(level.Id)
+            && versionId == presentation?.LevelVersionId;
+        return new CaseLevelMenuItem(
+            level.Id,
+            presentation?.LevelVersionId ?? _caseLevelVersionIds.GetValueOrDefault(level.Id),
+            presentation?.Order ?? level.Order,
+            presentation?.SectionOrder,
+            presentation?.SectionTitle,
+            presentation?.DisplayTitle ?? level.Title,
+            completed,
+            !CanSelectLevel(level));
+    }).ToArray();
     private IEnumerable<BlockKind> AvailableBlocks => IsSandbox ? Enum.GetValues<BlockKind>() : ActiveLevel?.AllowedBlocks ?? [];
     private LevelIntroStep? ActiveIntroStep => ActiveLevel is { } level && _introStepIndex is int index && index >= 0 && index < level.IntroSteps.Count
         ? level.IntroSteps[index]
@@ -673,7 +703,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _caseMode = !string.IsNullOrWhiteSpace(CaseToken) && RequestedAttempt is not null;
+        _caseMode = !IsSandbox && !string.IsNullOrWhiteSpace(CaseToken) && RequestedAttempt is not null;
         if (_caseMode)
         {
             _caseToken = CaseToken;
@@ -682,8 +712,12 @@ else
                 var attempt = await StudentCaseStore.ResumeAsync(_caseToken!);
                 if (attempt is null || attempt.AttemptId != RequestedAttempt) throw new InvalidOperationException("Попытка не найдена. Откройте ссылку QR и начните заново.");
                 _caseAttemptId = attempt.AttemptId;
-                _levels = attempt.Levels.OrderBy(item => item.Order).Select(item => item.Definition).ToList();
-                _caseLevelVersionIds = attempt.Levels.ToDictionary(item => item.Definition.Id, item => item.LevelVersionId);
+                var attemptLevels = attempt.Levels.OrderBy(item => item.Order)
+                    .Select(item => (Presentation: item, Definition: CloneForCase(item.Definition, Guid.NewGuid())))
+                    .ToArray();
+                _levels = attemptLevels.Select(item => item.Definition).ToList();
+                _caseLevelVersionIds = attemptLevels.ToDictionary(item => item.Definition.Id, item => item.Presentation.LevelVersionId);
+                _casePresentationByLevelId = attemptLevels.ToDictionary(item => item.Definition.Id, item => item.Presentation);
                 _completed = _levels.Where(level => attempt.CompletedLevelVersionIds.Contains(_caseLevelVersionIds[level.Id])).Select(level => level.Id).ToHashSet();
                 _activeLevelId = _levels.FirstOrDefault(level => !_completed.Contains(level.Id))?.Id ?? _levels.LastOrDefault()?.Id;
             }
@@ -739,6 +773,30 @@ else
         IntroSteps = []
     };
 
+    private static LevelDefinition CloneForCase(LevelDefinition source, Guid localId) => new()
+    {
+        Id = localId,
+        Order = source.Order,
+        Chapter = source.Chapter,
+        Title = source.Title,
+        Direction = source.Direction,
+        Location = source.Location,
+        Description = source.Description,
+        StoryIntro = source.StoryIntro,
+        StorySuccess = source.StorySuccess,
+        Objective = source.Objective,
+        InputDescription = source.InputDescription,
+        OutputDescription = source.OutputDescription,
+        Hint = source.Hint,
+        AllowedBlocks = source.AllowedBlocks.ToList(),
+        RequiredBlocks = source.RequiredBlocks.ToList(),
+        RequiredLoopCount = source.RequiredLoopCount,
+        RequiredLoopBodyOperationCount = source.RequiredLoopBodyOperationCount,
+        MaxOperationBlocks = source.MaxOperationBlocks,
+        Tests = source.Tests.ToList(),
+        IntroSteps = source.IntroSteps.ToList()
+    };
+
     private void AddSandboxTest()
     {
         if (!IsSandbox || ActiveLevel is null) return;
@@ -792,20 +850,20 @@ else
 
     private async Task SelectLevel(ChangeEventArgs args)
     {
-        if (Guid.TryParse(args.Value?.ToString(), out var id))
-        {
-            if (_caseMode)
-            {
-                var requestedLevel = _levels.FirstOrDefault(level => level.Id == id);
-                if (requestedLevel is null || !CanSelectLevel(requestedLevel)) return;
-            }
-            _activeLevelId = id;
-            ClearProgram();
-            await LoadSolutionAsync();
-            _showSuccess = false;
-            if (!IsSandbox)
-                ShowLevelIntro();
-        }
+        if (Guid.TryParse(args.Value?.ToString(), out var id)) await SelectLevelAsync(id);
+    }
+
+    private Task SelectCaseLevel(Guid id) => SelectLevelAsync(id);
+
+    private async Task SelectLevelAsync(Guid id)
+    {
+        var requestedLevel = _levels.FirstOrDefault(level => level.Id == id);
+        if (requestedLevel is null || !CanSelectLevel(requestedLevel)) return;
+        _activeLevelId = id;
+        ClearProgram();
+        await LoadSolutionAsync();
+        _showSuccess = false;
+        if (!IsSandbox) ShowLevelIntro();
     }
 
     private async Task LoadSolutionAsync()

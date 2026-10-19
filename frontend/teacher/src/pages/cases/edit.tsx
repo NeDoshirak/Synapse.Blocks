@@ -1,26 +1,198 @@
-import { Alert, Button, Card, Input, List, message, QRCode, Select, Space, Typography } from "antd";
+import { Alert, Button, Card, Input, message, QRCode, Space, Typography } from "antd";
 import { QrcodeOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { apiClient } from "../../providers/apiClient";
-import type { CaseReport, TeacherCase, TeacherLevel } from "../../types/api";
-import { addLevel, canPublishCase, moveLevel } from "../../resources/caseOrder";
+import { CaseSectionsEditor } from "../../components/cases/CaseSectionsEditor";
 import { CaseReport as CaseReportView } from "../../components/reports/CaseReport";
+import { canPublishCase, createCaseSection } from "../../resources/caseOrder";
+import { apiClient } from "../../providers/apiClient";
+import type { CaseReport, CaseSectionDraft, TeacherCase, TeacherLevel } from "../../types/api";
 
-export default function CaseEdit({create=false}:{create?:boolean}){
- const{id}=useParams();const navigate=useNavigate();const[levels,setLevels]=useState<TeacherLevel[]>([]);const[item,setItem]=useState<TeacherCase>();const[report,setReport]=useState<CaseReport>();const[reportError,setReportError]=useState("");const[reportLoading,setReportLoading]=useState(true);const[title,setTitle]=useState("");const[description,setDescription]=useState("");const[selected,setSelected]=useState<string[]>([]);const[shareUrl,setShareUrl]=useState("");const[error,setError]=useState("");
- useEffect(()=>{apiClient.request("/api/teacher/levels").then(x=>setLevels(x as TeacherLevel[]));if(!create&&id)apiClient.request(`/api/teacher/cases/${id}`).then(x=>{const c=x as TeacherCase;setItem(c);setTitle(c.title);setDescription(c.description);setSelected(c.levels.sort((a,b)=>a.order-b.order).map(l=>l.levelVersionId));});},[create,id]);
- useEffect(()=>{if(id&&!create){setReportLoading(true);apiClient.request(`/api/teacher/cases/${id}/report`).then(x=>setReport(x as CaseReport)).catch(e=>setReportError(e.message)).finally(()=>setReportLoading(false));}},[id,create,item?.isPublished]);
- const versions=useMemo(()=>levels.flatMap(l=>[{value:l.currentVersionId,label:`${l.title} · v${l.version}`}]),[levels]);
- const save=async()=>{setError("");try{const body={caseType:"orderedLevels",title,description,orderedLevelVersionIds:selected};const c=item?await apiClient.request(`/api/teacher/cases/${item.id}`,{method:"PUT",body:JSON.stringify(body)}):await apiClient.request("/api/teacher/cases",{method:"POST",body:JSON.stringify(body)});const saved=c as TeacherCase;setItem(saved);if(create)navigate(`/cases/${saved.id}`,{replace:true});else message.success("Набор сохранён");}catch(e){setError(e instanceof Error?e.message:"Не удалось сохранить набор")}};
- const publish=async()=>{if(!item)return;try{setItem(await apiClient.request(`/api/teacher/cases/${item.id}/publish`,{method:"POST"}) as TeacherCase);message.success("Набор опубликован")}catch(e){setError(e instanceof Error?e.message:"Не удалось опубликовать")}};
- const share=async()=>{if(!item)return;try{const result=await apiClient.request(`/api/teacher/cases/${item.id}/share-link`,{method:"POST"}) as {url:string};setShareUrl(new URL(result.url,window.location.origin).href);message.success("QR-ссылка готова. Скопируйте её сейчас.")}catch(e){setError(e instanceof Error?e.message:"Не удалось создать ссылку")}};
- const revoke=async()=>{if(!item)return;await apiClient.request(`/api/teacher/cases/${item.id}/share-link`,{method:"DELETE"});setShareUrl("");setItem({...item,shareLinkActive:false});message.success("QR-ссылка закрыта. История попыток сохранена.")};
- const archive=async()=>{if(!item)return;await apiClient.request(`/api/teacher/cases/${item.id}`,{method:"DELETE"});navigate("/cases")};
- const restore=async()=>{if(!item)return;await apiClient.request(`/api/teacher/cases/${item.id}/restore`,{method:"POST"});setItem({...item,archived:false});message.success("Набор восстановлен как неопубликованный")};
- const reorder=(index:number,delta:-1|1)=>setSelected(moveLevel(selected,index,delta));
- return <><Button type="link" href="/admin/cases">← Все наборы</Button><Typography.Title level={2}>{create?"Новый набор":title||"Набор уровней"}</Typography.Title>{error&&<Alert type="error" showIcon message={error} style={{marginBottom:16}}/>}{item?.archived&&<Alert type="warning" showIcon message="Набор в архиве. Попытки и отчёты сохранены, QR-ссылка закрыта." style={{marginBottom:16}}/>}<Card title="Содержание набора"><Space direction="vertical" style={{width:"100%"}} size="middle"><Input size="large" placeholder="Название набора" value={title} disabled={item?.archived} onChange={e=>setTitle(e.target.value)}/><Input.TextArea rows={2} placeholder="Описание для учеников" value={description} disabled={item?.archived} onChange={e=>setDescription(e.target.value)}/><Select mode="multiple" value={selected} disabled={item?.archived} onChange={ids=>setSelected(ids.reduce((all,id)=>addLevel(all,id),[] as string[]))} options={versions} placeholder="Выберите уровни. Повторять уровень нельзя." optionFilterProp="label"/><List bordered dataSource={selected} locale={{emptyText:"Добавьте хотя бы один уровень"}} renderItem={(v,i)=><List.Item actions={[<Button key="up" type="link" disabled={item?.archived||i===0} onClick={()=>reorder(i,-1)}>↑</Button>,<Button key="down" type="link" disabled={item?.archived||i===selected.length-1} onClick={()=>reorder(i,1)}>↓</Button>,<Button key="remove" type="link" danger disabled={item?.archived} onClick={()=>setSelected(selected.filter((_,n)=>n!==i))}>Убрать</Button>]}>{i+1}. {versions.find(x=>x.value===v)?.label??v}</List.Item>}/><Space wrap>{item?.archived?<Button type="primary" onClick={restore}>Восстановить набор</Button>:<><Button type="primary" onClick={save} disabled={!canPublishCase(title,selected)}>Сохранить набор</Button>{item&&<Button onClick={publish} disabled={!canPublishCase(title,selected)||item.isPublished}>Опубликовать</Button>}{item&&<Button danger onClick={archive}>В архив</Button>}</>}</Space>{item&&<Typography.Text type="secondary">{item.archived?"Архив · история попыток сохранена":item.isPublished?"Опубликован":"Черновик"} {item.isPublished&&!item.archived&&"· опубликованные версии уровней закреплены"}</Typography.Text>}</Space></Card>
- {item&&!item.archived&&<Card className="case-qr-card" title="QR-код" style={{marginTop:20}}><Space direction="vertical">{shareUrl?<><QRCode value={shareUrl} size={210}/><Input readOnly value={shareUrl}/><Space><Button onClick={()=>navigator.clipboard.writeText(shareUrl).then(()=>message.success("Ссылка скопирована"))}>Копировать ссылку</Button><Button onClick={()=>window.print()}>Распечатать QR</Button></Space><Typography.Text type="secondary">Ссылка показывается один раз. Сохраните её или распечатайте QR-код.</Typography.Text></>:<><Button type="primary" icon={<QrcodeOutlined />} onClick={share} disabled={!item.isPublished}>{item.shareLinkActive?"Перевыпустить QR и показать новую ссылку":"Создать QR"}</Button>{item.shareLinkActive&&<Alert type="warning" message="Активная ссылка была создана раньше и больше не доступна. Перевыпуск отключит предыдущий QR." />}</>}{item.shareLinkActive&&<Button danger onClick={revoke}>Закрыть QR</Button>}</Space></Card>}
- {item&&<Card title="Результаты учеников" style={{marginTop:20}}>{reportLoading?<Typography.Text type="secondary">Загружаем результаты…</Typography.Text>:reportError?<Alert type="error" message={reportError}/>:report?<CaseReportView report={report} levelCount={item.levels.length}/>:<Typography.Text type="secondary">Попыток пока нет</Typography.Text>}</Card>}
- </>;
+function toDrafts(item: TeacherCase): CaseSectionDraft[] {
+  return item.sections
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map(section => ({
+      clientId: section.id,
+      title: section.title ?? "",
+      levels: section.levels.slice().sort((a, b) => a.order - b.order).map(level => ({
+        levelVersionId: level.levelVersionId,
+        displayTitle: level.displayTitle ?? "",
+      })),
+    }));
+}
+
+export default function CaseEdit({ create = false }: { create?: boolean }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [levels, setLevels] = useState<TeacherLevel[]>([]);
+  const [item, setItem] = useState<TeacherCase>();
+  const [report, setReport] = useState<CaseReport>();
+  const [reportError, setReportError] = useState("");
+  const [reportLoading, setReportLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [sections, setSections] = useState<CaseSectionDraft[]>(() => [createCaseSection()]);
+  const [shareUrl, setShareUrl] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void apiClient.request("/api/teacher/levels").then(value => setLevels(value as TeacherLevel[]));
+    if (!create && id) {
+      void apiClient.request(`/api/teacher/cases/${id}`).then(value => {
+        const loaded = value as TeacherCase;
+        setItem(loaded);
+        setTitle(loaded.title);
+        setDescription(loaded.description);
+        setSections(toDrafts(loaded));
+      });
+    }
+  }, [create, id]);
+
+  useEffect(() => {
+    if (!id || create) return;
+    setReportLoading(true);
+    void apiClient.request(`/api/teacher/cases/${id}/report`)
+      .then(value => setReport(value as CaseReport))
+      .catch((reason: unknown) => setReportError(reason instanceof Error ? reason.message : "Не удалось загрузить отчёт"))
+      .finally(() => setReportLoading(false));
+  }, [id, create, item?.isPublished]);
+
+  const canSave = useMemo(() => canPublishCase(title, sections), [title, sections]);
+  const canonicalTitleByVersion = useMemo(() => Object.fromEntries(
+    (item?.sections ?? []).flatMap(section => section.levels.map(level => [level.levelVersionId, level.title] as const)),
+  ), [item]);
+
+  const buildRequest = () => ({
+      caseType: "orderedLevels",
+      title,
+      description,
+      sections: sections.map(section => ({
+        title: section.title.trim() || null,
+        levels: section.levels.map(level => ({
+          levelVersionId: level.levelVersionId,
+          displayTitle: level.displayTitle.trim() || null,
+        })),
+      })),
+    });
+
+  const persist = async () => {
+    const body = buildRequest();
+    const response = item
+      ? await apiClient.request(`/api/teacher/cases/${item.id}`, { method: "PUT", body: JSON.stringify(body) })
+      : await apiClient.request("/api/teacher/cases", { method: "POST", body: JSON.stringify(body) });
+    return response as TeacherCase;
+  };
+
+  const save = async () => {
+    setError("");
+    try {
+      const saved = await persist();
+      setItem(saved);
+      setSections(toDrafts(saved));
+      if (create) navigate(`/cases/${saved.id}`, { replace: true });
+      else message.success("Набор сохранён");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось сохранить набор");
+    }
+  };
+
+  const publish = async () => {
+    if (!item) return;
+    try {
+      const saved = await persist();
+      const published = await apiClient.request(`/api/teacher/cases/${saved.id}/publish`, { method: "POST" }) as TeacherCase;
+      setItem(published);
+      setSections(toDrafts(published));
+      message.success("Набор опубликован");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось опубликовать");
+    }
+  };
+
+  const share = async () => {
+    if (!item) return;
+    try {
+      const result = await apiClient.request(`/api/teacher/cases/${item.id}/share-link`, { method: "POST" }) as { url: string };
+      setShareUrl(new URL(result.url, window.location.origin).href);
+      message.success("QR-ссылка готова. Скопируйте её сейчас.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось создать ссылку");
+    }
+  };
+
+  const revoke = async () => {
+    if (!item) return;
+    await apiClient.request(`/api/teacher/cases/${item.id}/share-link`, { method: "DELETE" });
+    setShareUrl("");
+    setItem({ ...item, shareLinkActive: false });
+    message.success("QR-ссылка закрыта. История попыток сохранена.");
+  };
+
+  const archive = async () => {
+    if (!item) return;
+    await apiClient.request(`/api/teacher/cases/${item.id}`, { method: "DELETE" });
+    navigate("/cases");
+  };
+
+  const restore = async () => {
+    if (!item) return;
+    await apiClient.request(`/api/teacher/cases/${item.id}/restore`, { method: "POST" });
+    setItem({ ...item, archived: false });
+    message.success("Набор восстановлен как неопубликованный");
+  };
+
+  return <>
+    <Button type="link" href="/admin/cases">← Все наборы</Button>
+    <Typography.Title level={2}>{create ? "Новый набор" : title || "Набор уровней"}</Typography.Title>
+    {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+    {item?.archived && <Alert type="warning" showIcon message="Набор в архиве. Попытки и отчёты сохранены, QR-ссылка закрыта." style={{ marginBottom: 16 }} />}
+    <Card title="Содержание набора">
+      <Space direction="vertical" style={{ width: "100%" }} size="middle">
+        <Input size="large" placeholder="Название набора" value={title} disabled={item?.archived} onChange={event => setTitle(event.target.value)} />
+        <Input.TextArea rows={2} placeholder="Описание для учеников" value={description} disabled={item?.archived} onChange={event => setDescription(event.target.value)} />
+        <CaseSectionsEditor levels={levels} sections={sections} canonicalTitleByVersion={canonicalTitleByVersion} disabled={item?.archived} onChange={setSections} />
+        <Space wrap>
+          {item?.archived
+            ? <Button type="primary" onClick={restore}>Восстановить набор</Button>
+            : <>
+              <Button type="primary" onClick={save} disabled={!canSave}>Сохранить набор</Button>
+              {item && <Button onClick={publish} disabled={!canSave || item.isPublished}>Опубликовать</Button>}
+              {item && <Button danger onClick={archive}>В архив</Button>}
+            </>}
+        </Space>
+        {item && <Typography.Text type="secondary">{item.archived ? "Архив · история попыток сохранена" : item.isPublished ? "Опубликован" : "Черновик"} {item.isPublished && !item.archived && "· опубликованные версии заданий закреплены"}</Typography.Text>}
+      </Space>
+    </Card>
+
+    {item && !item.archived && <Card className="case-qr-card" title="QR-код" style={{ marginTop: 20 }}>
+      <Space direction="vertical">
+        {shareUrl
+          ? <>
+            <QRCode value={shareUrl} size={210} />
+            <Input readOnly value={shareUrl} />
+            <Space>
+              <Button onClick={() => navigator.clipboard.writeText(shareUrl).then(() => message.success("Ссылка скопирована"))}>Копировать ссылку</Button>
+              <Button onClick={() => window.print()}>Распечатать QR</Button>
+            </Space>
+            <Typography.Text type="secondary">Ссылка показывается один раз. Сохраните её или распечатайте QR-код.</Typography.Text>
+          </>
+          : <>
+            <Button type="primary" icon={<QrcodeOutlined />} onClick={share} disabled={!item.isPublished}>{item.shareLinkActive ? "Перевыпустить QR и показать новую ссылку" : "Создать QR"}</Button>
+            {item.shareLinkActive && <Alert type="warning" message="Активная ссылка была создана раньше и больше не доступна. Перевыпуск отключит предыдущий QR." />}
+          </>}
+        {item.shareLinkActive && <Button danger onClick={revoke}>Закрыть QR</Button>}
+      </Space>
+    </Card>}
+
+    {item && <Card title="Результаты учеников" style={{ marginTop: 20 }}>
+      {reportLoading
+        ? <Typography.Text type="secondary">Загружаем результаты…</Typography.Text>
+        : reportError
+          ? <Alert type="error" message={reportError} />
+          : report
+            ? <CaseReportView report={report} levelCount={item.levelCount} />
+            : <Typography.Text type="secondary">Попыток пока нет</Typography.Text>}
+    </Card>}
+  </>;
 }

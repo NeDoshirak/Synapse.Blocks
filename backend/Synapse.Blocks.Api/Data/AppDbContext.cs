@@ -11,6 +11,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TeacherLevel> TeacherLevels => Set<TeacherLevel>();
     public DbSet<TeacherCase> TeacherCases => Set<TeacherCase>();
+    public DbSet<CaseSection> CaseSections => Set<CaseSection>();
     public DbSet<CaseLevel> CaseLevels => Set<CaseLevel>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<Participant> Participants => Set<Participant>();
@@ -53,6 +54,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         teacherCase.Property(item => item.Description).HasMaxLength(2000).IsRequired();
         teacherCase.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.Levels).WithOne(level => level.Case).HasForeignKey(level => level.CaseId).OnDelete(DeleteBehavior.Restrict);
+        teacherCase.HasMany(item => item.Sections).WithOne(section => section.Case).HasForeignKey(section => section.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.ShareLinks).WithOne(link => link.Case).HasForeignKey(link => link.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany<Participant>().WithOne(participant => participant.Case).HasForeignKey(participant => participant.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany<Attempt>().WithOne(attempt => attempt.Case).HasForeignKey(attempt => attempt.CaseId).OnDelete(DeleteBehavior.Restrict);
@@ -60,8 +62,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         var caseLevel = modelBuilder.Entity<CaseLevel>();
         caseLevel.ToTable("case_levels");
         caseLevel.HasKey(item => item.Id);
-        caseLevel.HasIndex(item => new { item.CaseId, item.Order }).IsUnique();
+        caseLevel.HasIndex(item => item.CaseId);
+        caseLevel.HasIndex(item => new { item.SectionId, item.Order }).IsUnique();
+        caseLevel.Property(item => item.DisplayTitle).HasMaxLength(200);
         caseLevel.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
+        caseLevel.HasOne(item => item.Section).WithMany(section => section.Levels).HasForeignKey(item => item.SectionId).OnDelete(DeleteBehavior.Restrict);
+
+        var caseSection = modelBuilder.Entity<CaseSection>();
+        caseSection.ToTable("case_sections");
+        caseSection.HasKey(item => item.Id);
+        caseSection.HasIndex(item => item.CaseId);
+        caseSection.Property(item => item.Title).HasMaxLength(120);
+        caseSection.HasOne(item => item.Case).WithMany(item => item.Sections).HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
 
         var shareLink = modelBuilder.Entity<ShareLink>();
         shareLink.ToTable("share_links");
@@ -87,6 +99,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         attempt.HasIndex(item => new { item.CaseId, item.ParticipantId, item.StartedAt });
         attempt.Property(item => item.Status).HasMaxLength(20).IsRequired();
         attempt.Property(item => item.LevelVersionIdsJson).HasColumnType("jsonb").IsRequired();
+        attempt.Property(item => item.LevelPresentationJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb").IsRequired();
         attempt.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
         attempt.HasMany(item => item.LevelResults).WithOne(result => result.Attempt).HasForeignKey(result => result.AttemptId).OnDelete(DeleteBehavior.Restrict);
 

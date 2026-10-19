@@ -17,5 +17,4 @@ namespace Synapse.Blocks.Serialization;
 [JsonSerializable(typeof(LevelEvaluationDto))]
 [JsonSerializable(typeof(CreateStudentParticipantRequest))]
 [JsonSerializable(typeof(EmptyStudentRequest))]
-[JsonSerializable(typeof(CitySceneDefinition))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext;
