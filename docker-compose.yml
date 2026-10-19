@@ -26,6 +26,8 @@ services:
       Cookie__Secure: ${COOKIE_SECURE:-true}
       PublicOrigin: ${PUBLIC_ORIGIN:-http://localhost:8080}
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=${POSTGRES_DB:-synapse};Username=${POSTGRES_USER:-synapse};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - synapse-data-protection-keys:/root/.aspnet/DataProtection-Keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,3 +59,4 @@ services:
 
 volumes:
   synapse-postgres-data:
+  synapse-data-protection-keys:

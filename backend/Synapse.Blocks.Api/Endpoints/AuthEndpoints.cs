@@ -80,6 +80,22 @@ public static class AuthEndpoints
             return setup is null ? Results.Conflict() : Results.Ok(setup);
         }).RequireAuthorization();
 
+        app.MapPost("/api/auth/authenticator/rotate-setup", async (
+            ClaimsPrincipal principal,
+            HttpContext context,
+            IAntiforgery antiforgery,
+            UserManager<ApplicationUser> users,
+            AuthenticatorService authenticator) =>
+        {
+            if (!await AntiforgeryValidation.IsValidAsync(antiforgery, context)) return Results.BadRequest();
+            var user = await users.GetUserAsync(principal);
+            if (user is null || !user.IsActive) return Results.Unauthorized();
+            var setup = await authenticator.RotateSetupAsync(user);
+            return setup is null ? Results.Conflict() : Results.Ok(setup);
+        })
+            .RequireAuthorization()
+            .RequireRateLimiting("auth-attempts");
+
         app.MapPost("/api/auth/authenticator/confirm", async (
             AuthenticatorCodeRequest request,
             ClaimsPrincipal principal,

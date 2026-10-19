@@ -12,13 +12,23 @@ export default function AuthenticatorSetupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
     let active = true;
     apiClient.request("/api/auth/authenticator/setup")
       .then(result => { if (active) setSetup(result as AuthenticatorSetup); })
-      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Не удалось подготовить настройку."); })
+      .catch(reason => {
+        if (!active) return;
+        if ((reason as { statusCode?: number })?.statusCode === 401) {
+          setError("Сессия завершилась. Войдите заново перед настройкой приложения-аутентификатора.");
+          setSessionExpired(true);
+        } else {
+          setError(reason instanceof Error ? reason.message : "Не удалось подготовить настройку.");
+        }
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -33,9 +43,33 @@ export default function AuthenticatorSetupPage() {
       setPendingRecoveryCodes(result.recoveryCodes);
       navigate("/recovery-codes", { replace: true });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Код не подошёл. Проверьте приложение и попробуйте ещё раз.");
+      if ((reason as { statusCode?: number })?.statusCode === 401) {
+        setError("Сессия завершилась. Войдите заново перед настройкой приложения-аутентификатора.");
+        setSetup(undefined);
+        setSessionExpired(true);
+      } else {
+        setError(reason instanceof Error ? reason.message : "Код не подошёл. Проверьте приложение и попробуйте ещё раз.");
+      }
       form.resetFields();
     } finally { setConfirming(false); }
+  };
+
+  const rotateSetup = async () => {
+    setError("");
+    setRotating(true);
+    try {
+      const result = await apiClient.request("/api/auth/authenticator/rotate-setup", { method: "POST" }) as AuthenticatorSetup;
+      setSetup(result);
+      form.resetFields();
+    } catch (reason) {
+      if ((reason as { statusCode?: number })?.statusCode === 401) {
+        setError("Сессия завершилась. Войдите заново перед настройкой приложения-аутентификатора.");
+        setSetup(undefined);
+        setSessionExpired(true);
+      } else {
+        setError(reason instanceof Error ? reason.message : "Не удалось выпустить новый ключ.");
+      }
+    } finally { setRotating(false); }
   };
 
   return <main className="center-page"><Card className="auth-card auth-card-wide">
@@ -54,6 +88,8 @@ export default function AuthenticatorSetupPage() {
         </Form.Item>
         <Button className="primary-button" type="primary" htmlType="submit" loading={confirming}>Подтвердить и продолжить</Button>
       </Form>
-    </> : <Alert type="warning" showIcon message="Сначала войдите по паролю, чтобы настроить приложение-аутентификатор." action={<Button onClick={() => navigate("/login")}>Ко входу</Button>} />}
+      <Typography.Paragraph type="secondary" className="auth-setup-note">Если ключ уже был раскрыт или потерян, выпустите новый. Старый ключ сразу перестанет работать.</Typography.Paragraph>
+      <Button onClick={rotateSetup} loading={rotating}>Выпустить новый ключ</Button>
+    </> : <Alert type="warning" showIcon message={sessionExpired ? "Нужно войти заново" : "Сначала войдите по паролю, чтобы настроить приложение-аутентификатор."} action={<Button onClick={() => navigate("/login", { replace: true })}>{sessionExpired ? "Войти" : "Ко входу"}</Button>} />}
   </Card></main>;
 }

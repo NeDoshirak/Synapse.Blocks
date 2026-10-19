@@ -29,6 +29,14 @@ public sealed class AuthenticatorService(UserManager<ApplicationUser> users)
         return new AuthenticatorSetupDto(key, uri);
     }
 
+    public async Task<AuthenticatorSetupDto?> RotateSetupAsync(ApplicationUser user)
+    {
+        if (!user.IsActive || user.TwoFactorEnabled) return null;
+        var reset = await users.ResetAuthenticatorKeyAsync(user);
+        if (!reset.Succeeded) throw new InvalidOperationException("Could not rotate the authenticator key.");
+        return await GetSetupAsync(user);
+    }
+
     public async Task<IReadOnlyList<string>?> ConfirmAsync(ApplicationUser user, string? code)
     {
         var normalizedCode = code?.Trim();
