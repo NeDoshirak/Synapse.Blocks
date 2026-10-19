@@ -44,7 +44,7 @@ else if (ActiveMarkdownStep is { } markdownStep)
     <MarkdownPageContent Step="markdownStep"
                          IsAttemptComplete="AttemptIsComplete"
                          IsBusy="_completingMarkdown"
-                         Error="_markdownCompletionError"
+                         Error="@_markdownCompletionError"
                          OnContinue="ContinueMarkdownAsync" />
 }
 else if (ActiveLevel is null)

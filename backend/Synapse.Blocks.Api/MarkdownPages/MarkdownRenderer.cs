@@ -19,6 +19,10 @@ public sealed class MarkdownRenderer
         "src=(?<quote>['\\\"])asset:(?<id>[0-9a-fA-F-]{36})\\k<quote>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    private static readonly Regex MermaidCodeBlock = new(
+        "<pre><code class=\"language-mermaid\">(?<diagram>[\\s\\S]*?)</code></pre>",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private static readonly HashSet<string> AllowedTags = new(StringComparer.OrdinalIgnoreCase)
     {
         "a", "abbr", "b", "blockquote", "br", "caption", "code", "dd", "del", "details", "div", "dl", "dt",
@@ -34,7 +38,7 @@ public sealed class MarkdownRenderer
 
     private static readonly HashSet<string> AllowedClasses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "language-mermaid", "math", "math-inline", "math-display", "task-list", "task-list-item", "contains-task-list"
+        "language-mermaid", "mermaid", "math", "math-inline", "math-display", "task-list", "task-list-item", "contains-task-list"
     };
 
     public string Render(string markdown, Func<Guid, string> assetUrl)
@@ -48,6 +52,7 @@ public sealed class MarkdownRenderer
             });
 
         var rendered = Markdown.ToHtml(markdown, Pipeline);
+        rendered = MermaidCodeBlock.Replace(rendered, "<div class=\"mermaid\">${diagram}</div>");
         rendered = AssetImageSource.Replace(rendered, match =>
         {
             if (!Guid.TryParse(match.Groups["id"].Value, out var assetId)) return match.Value;

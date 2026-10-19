@@ -17,7 +17,10 @@ function ensureStylesheet() {
 
 function renderMath(root) {
     for (const math of root.querySelectorAll(".math:not([data-enhanced]), .math-inline:not([data-enhanced]), .math-display:not([data-enhanced])")) {
-        const source = (math.textContent ?? "").trim().replace(/^\$\$?\s*/, "").replace(/\s*\$\$?$/, "");
+        let source = (math.textContent ?? "").trim();
+        if (source.startsWith("\\(") && source.endsWith("\\)")) source = source.slice(2, -2).trim();
+        else if (source.startsWith("\\[") && source.endsWith("\\]")) source = source.slice(2, -2).trim();
+        else source = source.replace(/^\$\$?\s*/, "").replace(/\s*\$\$?$/, "");
         try {
             katex.render(source, math, {
                 displayMode: math.tagName.toLowerCase() === "div" || math.classList.contains("math-display"),
