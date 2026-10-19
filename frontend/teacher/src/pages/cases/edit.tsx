@@ -6,7 +6,7 @@ import { CaseSectionsEditor } from "../../components/cases/CaseSectionsEditor";
 import { CaseReport as CaseReportView } from "../../components/reports/CaseReport";
 import { canPublishCase, createCaseSection } from "../../resources/caseOrder";
 import { apiClient } from "../../providers/apiClient";
-import type { CaseReport, CaseSectionDraft, TeacherCase, TeacherLevel } from "../../types/api";
+import type { CaseProgressionMode, CaseReport, CaseSectionDraft, MarkdownPage, TeacherCase, TeacherLevel } from "../../types/api";
 
 function toDrafts(item: TeacherCase): CaseSectionDraft[] {
   return item.sections
@@ -15,9 +15,14 @@ function toDrafts(item: TeacherCase): CaseSectionDraft[] {
     .map(section => ({
       clientId: section.id,
       title: section.title ?? "",
-      levels: section.levels.slice().sort((a, b) => a.order - b.order).map(level => ({
-        levelVersionId: level.levelVersionId,
-        displayTitle: level.displayTitle ?? "",
+      items: section.items.slice().sort((a, b) => a.order - b.order).map(content => ({
+        clientId: content.id,
+        kind: content.kind,
+        ...(content.levelVersionId ? { levelVersionId: content.levelVersionId } : {}),
+        ...(content.markdownPageVersionId ? { markdownPageVersionId: content.markdownPageVersionId } : {}),
+        displayTitle: content.displayTitle ?? "",
+        canonicalTitle: content.title,
+        isBuiltIn: content.isBuiltIn,
       })),
     }));
 }
@@ -26,6 +31,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [levels, setLevels] = useState<TeacherLevel[]>([]);
+  const [markdownPages, setMarkdownPages] = useState<MarkdownPage[]>([]);
   const [item, setItem] = useState<TeacherCase>();
   const [report, setReport] = useState<CaseReport>();
   const [reportError, setReportError] = useState("");
@@ -33,11 +39,13 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sections, setSections] = useState<CaseSectionDraft[]>(() => [createCaseSection()]);
+  const [progressionMode, setProgressionMode] = useState<CaseProgressionMode>("Sequential");
   const [shareUrl, setShareUrl] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     void apiClient.request("/api/teacher/levels").then(value => setLevels(value as TeacherLevel[]));
+    void apiClient.request("/api/teacher/markdown-pages/").then(value => setMarkdownPages(value as MarkdownPage[]));
     if (!create && id) {
       void apiClient.request(`/api/teacher/cases/${id}`).then(value => {
         const loaded = value as TeacherCase;
@@ -45,6 +53,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
         setTitle(loaded.title);
         setDescription(loaded.description);
         setSections(toDrafts(loaded));
+        setProgressionMode(loaded.progressionMode);
       });
     }
   }, [create, id]);
@@ -59,19 +68,18 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
   }, [id, create, item?.isPublished]);
 
   const canSave = useMemo(() => canPublishCase(title, sections), [title, sections]);
-  const canonicalTitleByVersion = useMemo(() => Object.fromEntries(
-    (item?.sections ?? []).flatMap(section => section.levels.map(level => [level.levelVersionId, level.title] as const)),
-  ), [item]);
-
   const buildRequest = () => ({
       caseType: "orderedLevels",
       title,
       description,
+      progressionMode,
       sections: sections.map(section => ({
         title: section.title.trim() || null,
-        levels: section.levels.map(level => ({
-          levelVersionId: level.levelVersionId,
-          displayTitle: level.displayTitle.trim() || null,
+        items: section.items.map(content => ({
+          kind: content.kind,
+          levelVersionId: content.levelVersionId ?? null,
+          markdownPageVersionId: content.markdownPageVersionId ?? null,
+          displayTitle: content.displayTitle.trim() || null,
         })),
       })),
     });
@@ -90,6 +98,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
       const saved = await persist();
       setItem(saved);
       setSections(toDrafts(saved));
+      setProgressionMode(saved.progressionMode);
       if (create) navigate(`/cases/${saved.id}`, { replace: true });
       else message.success("Набор сохранён");
     } catch (reason) {
@@ -104,6 +113,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
       const published = await apiClient.request(`/api/teacher/cases/${saved.id}/publish`, { method: "POST" }) as TeacherCase;
       setItem(published);
       setSections(toDrafts(published));
+      setProgressionMode(published.progressionMode);
       message.success("Набор опубликован");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось опубликовать");
@@ -151,7 +161,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Input size="large" placeholder="Название набора" value={title} disabled={item?.archived} onChange={event => setTitle(event.target.value)} />
         <Input.TextArea rows={2} placeholder="Описание для учеников" value={description} disabled={item?.archived} onChange={event => setDescription(event.target.value)} />
-        <CaseSectionsEditor levels={levels} sections={sections} canonicalTitleByVersion={canonicalTitleByVersion} disabled={item?.archived} onChange={setSections} />
+        <CaseSectionsEditor levels={levels} markdownPages={markdownPages} sections={sections} progressionMode={progressionMode} onProgressionModeChange={setProgressionMode} disabled={item?.archived} onChange={setSections} />
         <Space wrap>
           {item?.archived
             ? <Button type="primary" onClick={restore}>Восстановить набор</Button>
@@ -191,7 +201,7 @@ export default function CaseEdit({ create = false }: { create?: boolean }) {
         : reportError
           ? <Alert type="error" message={reportError} />
           : report
-            ? <CaseReportView report={report} levelCount={item.levelCount} />
+            ? <CaseReportView report={report} itemCount={item.itemCount} />
             : <Typography.Text type="secondary">Попыток пока нет</Typography.Text>}
     </Card>}
   </>;

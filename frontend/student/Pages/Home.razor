@@ -9,11 +9,43 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>@(Sandbox ? "Песочница — Синапс" : "Игра — ФВС/Код")</PageTitle>
+<PageTitle>@(ActiveMarkdownStep is { } markdownPage ? $"{markdownPage.Title} — ФВС/Код" : Sandbox ? "Песочница — Синапс" : "Игра — ФВС/Код")</PageTitle>
+
+@if (!_loading && (ActiveLevel is not null || ActiveMarkdownStep is not null))
+{
+    @if (ActiveLevel is not null && ActiveMarkdownStep is null)
+    {
+        <SectionContent SectionName="GameHeaderClear">
+            <button type="button"
+                    class="game-header-clear"
+                    aria-label="Очистить поле"
+                    title="Очистить поле"
+                    disabled="@(!_program.Nodes.Any())"
+                    @onclick="ClearProgram">
+                <span class="game-header-clear-icon" aria-hidden="true">×</span>
+                <span class="game-header-clear-label">Очистить поле</span>
+            </button>
+        </SectionContent>
+    }
+    <SectionContent SectionName="GameHeaderLevel">
+        <CaseLevelPicker Items="LevelMenuItems"
+                         SelectedLevelId="SelectedMenuItemId"
+                         IsCaseMode="_caseMode"
+                         OnSelect="SelectLevelFromMenu" />
+    </SectionContent>
+}
 
 @if (_loading)
 {
     <div class="page-loading"><span></span><p>Загружаю уровни…</p></div>
+}
+else if (ActiveMarkdownStep is { } markdownStep)
+{
+    <MarkdownPageContent Step="markdownStep"
+                         IsAttemptComplete="AttemptIsComplete"
+                         IsBusy="_completingMarkdown"
+                         Error="_markdownCompletionError"
+                         OnContinue="ContinueMarkdownAsync" />
 }
 else if (ActiveLevel is null)
 {
@@ -33,40 +65,16 @@ else if (ActiveLevel is null)
 }
 else
 {
-    <section class="game-toolbar @(IsSandbox ? "sandbox-toolbar" : "child-toolbar")">
-        <div>
-                <small>@(IsSandbox ? "ПЕСОЧНИЦА / УРОВЕНЬ" : _caseMode ? "УЧЕБНЫЙ НАБОР / ЗАДАНИЕ" : "ТЕКУЩАЯ ОПЕРАЦИЯ")</small>
-            @if (_caseMode)
-            {
-                <CaseLevelPicker Items="CaseMenuItems" SelectedLevelId="ActiveLevel.Id" OnSelect="SelectCaseLevel" />
-            }
-            else
-            {
-                <select value="@ActiveLevel.Id" @onchange="SelectLevel">
-                    @foreach (var level in _levels)
-                    {
-                        <option value="@level.Id" disabled="@(!CanSelectLevel(level))">@(_completed.Contains(level.Id) ? "✓" : "○") @level.Order.ToString("00") · @level.Title</option>
-                    }
-                </select>
-            }
-        </div>
-        <div class="toolbar-stats">
-            @if (IsSandbox)
-            {
+    @if (IsSandbox)
+    {
+        <section class="game-toolbar sandbox-toolbar">
+            <div class="toolbar-stats">
                 <span><b>@ActiveLevel.Tests.Count</b> тестов</span>
-            }
-            @if (IsSandbox)
-            {
                 <span class="sandbox-mode">без зачёта</span>
                 <button type="button" @onclick="ExportSandboxJson">Скачать JSON</button>
-            }
-            @if (ActiveLevel.IntroSteps.Count > 0)
-            {
-                <button type="button" @onclick="ShowLevelIntro">Пояснение</button>
-            }
-            <button type="button" @onclick="ClearProgram" disabled="@(!_program.Nodes.Any())">Очистить поле</button>
-        </div>
-    </section>
+            </div>
+        </section>
+    }
 
     <div class="game-layout @(IsSandbox ? "sandbox-layout" : "child-game-layout")">
         <aside class="mission-pane @(IsSandbox ? "sandbox-settings" : "") @IntroHighlightClass(IntroHighlightTarget.Mission)">
@@ -96,7 +104,13 @@ else
                 else
                 {
                     <span class="direction-pill">@ActiveLevel.Direction</span>
-                    <p class="operation-number">ОПЕРАЦИЯ @ActiveLevelDisplayOrder.ToString("00")</p>
+                    <div class="operation-heading">
+                        <p class="operation-number">ОПЕРАЦИЯ @ActiveLevelDisplayOrder.ToString("00")</p>
+                        @if (ActiveLevel.IntroSteps.Count > 0)
+                        {
+                            <button type="button" class="mission-intro-button" @onclick="ShowLevelIntro">Пояснение</button>
+                        }
+                    </div>
                     <h1>@ActiveLevelDisplayTitle</h1>
                     <p class="mission-description">@ActiveLevel.Description</p>
 
@@ -521,7 +535,7 @@ else
                 <div class="complete-stats"><span><b>@_results.Count</b> тестов пройдено</span><span><b>@_program.Nodes.Count</b> блоков в решении</span></div>
                 <div class="complete-actions">
                     <button type="button" class="secondary" @onclick="CloseSuccess">Посмотреть схему</button>
-                    <button type="button" class="primary" @onclick="GoToNextLevel">@(HasNextLevel ? "Следующий уровень →" : _caseMode ? "Завершить набор →" : "Вернуться к уровням →")</button>
+                    <button type="button" class="primary" @onclick="GoToNextLevel">@(_caseMode ? HasNextStep ? "Следующий шаг →" : "Завершить набор →" : HasNextLevel ? "Следующий уровень →" : "Вернуться к уровням →")</button>
                 </div>
             </section>
         </div>
@@ -588,7 +602,12 @@ else
     private Guid? _caseAttemptId;
     private string? _caseToken;
     private Dictionary<Guid, Guid> _caseLevelVersionIds = [];
-    private Dictionary<Guid, StudentCaseLevelDto> _casePresentationByLevelId = [];
+    private Dictionary<Guid, StudentCaseStepDto> _casePresentationByLevelId = [];
+    private List<StudentCaseStepDto> _attemptSteps = [];
+    private Guid? _activeStepId;
+    private string _progressionMode = "Sequential";
+    private string _markdownCompletionError = "";
+    private bool _completingMarkdown;
     private bool _showSuccess;
     private bool _running;
     private BlockKind? _helpKind;
@@ -619,6 +638,7 @@ else
     private List<string> _graphIssues = [];
     private string _lastVariableSlot = "A";
     private HashSet<Guid> _completed = [];
+    private HashSet<Guid> _completedStepIds = [];
     private double _connectionStartClientX;
     private double _connectionStartClientY;
     private double _connectionStartWorldX;
@@ -645,39 +665,66 @@ else
     [Parameter] public bool Sandbox { get; set; }
 
     private LevelDefinition? ActiveLevel => _levels.FirstOrDefault(level => level.Id == _activeLevelId) ?? _levels.FirstOrDefault();
+    private StudentCaseStepDto? ActiveMarkdownStep => _caseMode && _activeStepId is Guid stepId
+        ? _attemptSteps.FirstOrDefault(step => step.StepId == stepId && step.Kind == "markdown")
+        : null;
+    private Guid SelectedMenuItemId => _caseMode ? _activeStepId ?? Guid.Empty : ActiveLevel?.Id ?? Guid.Empty;
+    private bool AttemptIsComplete => _attemptSteps.Count > 0 && _attemptSteps.All(step => step.IsCompleted);
     private bool IsSandbox => Sandbox;
     private string ActiveLevelDisplayTitle => ActiveLevel is { } level && _casePresentationByLevelId.TryGetValue(level.Id, out var presentation)
-        ? presentation.DisplayTitle
+        ? presentation.Title
         : ActiveLevel?.Title ?? "";
     private int ActiveLevelDisplayOrder => ActiveLevel is { } level && _casePresentationByLevelId.TryGetValue(level.Id, out var presentation)
         ? presentation.Order
         : ActiveLevel?.Order ?? 0;
-    private IReadOnlyList<CaseLevelMenuItem> CaseMenuItems => _levels.Select(level =>
-    {
-        _casePresentationByLevelId.TryGetValue(level.Id, out var presentation);
-        var completed = _caseLevelVersionIds.TryGetValue(level.Id, out var versionId)
-            && _completed.Contains(level.Id)
-            && versionId == presentation?.LevelVersionId;
-        return new CaseLevelMenuItem(
+    private IReadOnlyList<CaseMenuItem> CaseMenuItems => _attemptSteps.Select(step => new CaseMenuItem(
+        step.StepId,
+        step.LevelVersionId,
+        step.Kind,
+        step.Order,
+        step.SectionOrder,
+        step.SectionTitle,
+        step.Title,
+        step.IsCompleted || _completedStepIds.Contains(step.StepId),
+        !CanSelectCaseStep(step))).ToArray();
+    private IReadOnlyList<CaseMenuItem> LevelMenuItems => _caseMode
+        ? CaseMenuItems
+        : _levels.Select(level => new CaseMenuItem(
             level.Id,
-            presentation?.LevelVersionId ?? _caseLevelVersionIds.GetValueOrDefault(level.Id),
-            presentation?.Order ?? level.Order,
-            presentation?.SectionOrder,
-            presentation?.SectionTitle,
-            presentation?.DisplayTitle ?? level.Title,
-            completed,
-            !CanSelectLevel(level));
-    }).ToArray();
+            null,
+            "level",
+            level.Order,
+            null,
+            null,
+            level.Title,
+            _completed.Contains(level.Id),
+            !CanSelectLevel(level))).ToArray();
     private IEnumerable<BlockKind> AvailableBlocks => IsSandbox ? Enum.GetValues<BlockKind>() : ActiveLevel?.AllowedBlocks ?? [];
     private LevelIntroStep? ActiveIntroStep => ActiveLevel is { } level && _introStepIndex is int index && index >= 0 && index < level.IntroSteps.Count
         ? level.IntroSteps[index]
         : null;
     private bool HasNextLevel => ActiveLevel is not null && _levels.IndexOf(ActiveLevel) < _levels.Count - 1;
+    private bool HasNextStep => NextIncompleteStep(_activeStepId) is not null;
     private bool CanSelectLevel(LevelDefinition level)
     {
         if (!_caseMode) return true;
-        var next = _levels.FirstOrDefault(candidate => !_completed.Contains(candidate.Id));
-        return next?.Id == level.Id;
+        var versionId = _caseLevelVersionIds.GetValueOrDefault(level.Id);
+        var step = _attemptSteps.FirstOrDefault(candidate => candidate.Kind == "level" && candidate.LevelVersionId == versionId);
+        return step is not null && CanSelectCaseStep(step);
+    }
+    private bool CanSelectCaseStep(StudentCaseStepDto step)
+    {
+        if (_progressionMode == "AllOpen") return true;
+        if (step.IsCompleted || _completedStepIds.Contains(step.StepId)) return true;
+        var next = _attemptSteps.FirstOrDefault(candidate => !candidate.IsCompleted && !_completedStepIds.Contains(candidate.StepId));
+        return next?.StepId == step.StepId;
+    }
+    private StudentCaseStepDto? NextIncompleteStep(Guid? afterStepId)
+    {
+        var incomplete = _attemptSteps.Where(step => !step.IsCompleted && !_completedStepIds.Contains(step.StepId)).OrderBy(step => step.Order).ToArray();
+        if (incomplete.Length == 0) return null;
+        var currentOrder = afterStepId is Guid id ? _attemptSteps.FirstOrDefault(step => step.StepId == id)?.Order : null;
+        return currentOrder is int order ? incomplete.FirstOrDefault(step => step.Order > order) ?? incomplete[0] : incomplete[0];
     }
     private bool CanStepProgram => ActiveLevel is not null && ActiveLevel.Tests.Count > 0 && _program.Nodes.Count > 0 && !_running && !_stepSessionFinished;
     private string StepButtonLabel => _stepSessionFinished
@@ -709,17 +756,28 @@ else
             _caseToken = CaseToken;
             try
             {
-                var attempt = await StudentCaseStore.ResumeAsync(_caseToken!);
+                var attempt = await StudentCaseStore.GetCurrentAttemptAsync(_caseToken!);
                 if (attempt is null || attempt.AttemptId != RequestedAttempt) throw new InvalidOperationException("Попытка не найдена. Откройте ссылку QR и начните заново.");
                 _caseAttemptId = attempt.AttemptId;
-                var attemptLevels = attempt.Levels.OrderBy(item => item.Order)
-                    .Select(item => (Presentation: item, Definition: CloneForCase(item.Definition, Guid.NewGuid())))
+                _attemptSteps = attempt.Steps.Count > 0
+                    ? attempt.Steps.OrderBy(item => item.Order).ToList()
+                    : attempt.Levels.OrderBy(item => item.Order).Select(item => new StudentCaseStepDto(
+                        item.LevelVersionId, "level", item.Order, item.SectionOrder, item.SectionTitle,
+                        item.DisplayTitle, item.LevelVersionId, item.Definition, null,
+                        attempt.CompletedLevelVersionIds.Contains(item.LevelVersionId))).ToList();
+                _progressionMode = attempt.ProgressionMode;
+                _completedStepIds = _attemptSteps.Where(step => step.IsCompleted).Select(step => step.StepId).ToHashSet();
+                var attemptLevels = _attemptSteps.Where(step => step.Kind == "level" && step.LevelVersionId is not null && step.Definition is not null)
+                    .OrderBy(item => item.Order)
+                    .Select(item => (Presentation: item, Definition: CloneForCase(item.Definition!, Guid.NewGuid())))
                     .ToArray();
                 _levels = attemptLevels.Select(item => item.Definition).ToList();
-                _caseLevelVersionIds = attemptLevels.ToDictionary(item => item.Definition.Id, item => item.Presentation.LevelVersionId);
+                _caseLevelVersionIds = attemptLevels.ToDictionary(item => item.Definition.Id, item => item.Presentation.LevelVersionId!.Value);
                 _casePresentationByLevelId = attemptLevels.ToDictionary(item => item.Definition.Id, item => item.Presentation);
-                _completed = _levels.Where(level => attempt.CompletedLevelVersionIds.Contains(_caseLevelVersionIds[level.Id])).Select(level => level.Id).ToHashSet();
-                _activeLevelId = _levels.FirstOrDefault(level => !_completed.Contains(level.Id))?.Id ?? _levels.LastOrDefault()?.Id;
+                _completed = attemptLevels.Where(item => item.Presentation.IsCompleted)
+                    .Select(item => item.Definition.Id).ToHashSet();
+                var initialStep = NextIncompleteStep(null) ?? _attemptSteps.LastOrDefault();
+                if (initialStep is not null) ActivateAttemptStep(initialStep);
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
             {
@@ -738,7 +796,7 @@ else
         }
         _loading = false;
         await LoadSolutionAsync();
-        if (!IsSandbox)
+        if (!IsSandbox && ActiveMarkdownStep is null)
             ShowLevelIntro();
     }
 
@@ -825,7 +883,7 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_loading || ActiveLevel is null) return;
+        if (_loading || ActiveMarkdownStep is not null || ActiveLevel is null) return;
 
         if (!_canvasCentered)
         {
@@ -848,17 +906,76 @@ else
         }
     }
 
-    private async Task SelectLevel(ChangeEventArgs args)
+    private Task SelectLevelFromMenu(Guid id) => _caseMode ? SelectCaseStepAsync(id) : SelectLevelAsync(id);
+
+    private void ActivateAttemptStep(StudentCaseStepDto step)
     {
-        if (Guid.TryParse(args.Value?.ToString(), out var id)) await SelectLevelAsync(id);
+        _activeStepId = step.StepId;
+        if (step.Kind == "level" && step.LevelVersionId is Guid versionId)
+            _activeLevelId = _caseLevelVersionIds.FirstOrDefault(pair => pair.Value == versionId).Key;
+        else
+            _activeLevelId = null;
     }
 
-    private Task SelectCaseLevel(Guid id) => SelectLevelAsync(id);
+    private async Task SelectCaseStepAsync(Guid stepId)
+    {
+        var step = _attemptSteps.FirstOrDefault(item => item.StepId == stepId);
+        if (step is null || !CanSelectCaseStep(step)) return;
+        ActivateAttemptStep(step);
+        _markdownCompletionError = "";
+        _showSuccess = false;
+        _introStepIndex = null;
+        ClearProgram();
+        if (step.Kind == "level")
+        {
+            await LoadSolutionAsync();
+            ShowLevelIntro();
+        }
+    }
+
+    private async Task ContinueMarkdownAsync(Guid stepId)
+    {
+        var step = _attemptSteps.FirstOrDefault(item => item.StepId == stepId && item.Kind == "markdown");
+        if (step is null || _caseToken is null || _caseAttemptId is not Guid attemptId || _completingMarkdown) return;
+        _markdownCompletionError = "";
+        if (step.IsCompleted || _completedStepIds.Contains(stepId))
+        {
+            var nextExisting = NextIncompleteStep(stepId);
+            if (nextExisting is not null) await SelectCaseStepAsync(nextExisting.StepId);
+            return;
+        }
+
+        _completingMarkdown = true;
+        try
+        {
+            var attempt = await StudentCaseStore.CompleteMarkdownStepAsync(_caseToken, attemptId, stepId);
+            _attemptSteps = attempt.Steps.OrderBy(item => item.Order).ToList();
+            _progressionMode = attempt.ProgressionMode;
+            _completedStepIds = _attemptSteps.Where(item => item.IsCompleted).Select(item => item.StepId).ToHashSet();
+            var completedVersions = attempt.CompletedLevelVersionIds.ToHashSet();
+            _completed = _caseLevelVersionIds.Where(pair => completedVersions.Contains(pair.Value)).Select(pair => pair.Key).ToHashSet();
+            var next = NextIncompleteStep(stepId);
+            if (next is not null) await SelectCaseStepAsync(next.StepId);
+        }
+        catch (HttpRequestException ex)
+        {
+            _markdownCompletionError = ex.Message;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _markdownCompletionError = ex.Message;
+        }
+        finally
+        {
+            _completingMarkdown = false;
+        }
+    }
 
     private async Task SelectLevelAsync(Guid id)
     {
         var requestedLevel = _levels.FirstOrDefault(level => level.Id == id);
         if (requestedLevel is null || !CanSelectLevel(requestedLevel)) return;
+        _activeStepId = null;
         _activeLevelId = id;
         ClearProgram();
         await LoadSolutionAsync();
@@ -868,7 +985,7 @@ else
 
     private async Task LoadSolutionAsync()
     {
-        if (IsSandbox || ActiveLevel is null) return;
+        if (IsSandbox || ActiveMarkdownStep is not null || ActiveLevel is null) return;
         var saved = _caseMode && _caseAttemptId is Guid attemptId && _caseLevelVersionIds.TryGetValue(ActiveLevel.Id, out var versionId)
             ? await SolutionStore.LoadCaseAsync(attemptId, versionId)
             : await SolutionStore.LoadAsync(ActiveLevel.Id);
@@ -882,7 +999,7 @@ else
     private async Task PersistProgramAsync(int generation)
     {
         await Task.Delay(250);
-        if (generation != _saveGeneration || IsSandbox || ActiveLevel is null || _loading) return;
+        if (generation != _saveGeneration || IsSandbox || ActiveMarkdownStep is not null || ActiveLevel is null || _loading) return;
         if (_caseMode && _caseAttemptId is Guid attemptId && _caseLevelVersionIds.TryGetValue(ActiveLevel.Id, out var versionId))
             await SolutionStore.SaveCaseAsync(attemptId, versionId, _program);
         else
@@ -1474,6 +1591,12 @@ else
                 {
                     foreach (var level in _levels)
                         if (evaluation.CompletedLevelVersionIds.Contains(_caseLevelVersionIds[level.Id])) _completed.Add(level.Id);
+                    var completedStep = _attemptSteps.FirstOrDefault(step => step.Kind == "level" && step.LevelVersionId == versionId);
+                    if (completedStep is not null)
+                    {
+                        _completedStepIds.Add(completedStep.StepId);
+                        _attemptSteps = _attemptSteps.Select(step => step.StepId == completedStep.StepId ? step with { IsCompleted = true } : step).ToList();
+                    }
                 }
                 else if (_results.All(result => result.Passed))
                 {
@@ -1542,8 +1665,22 @@ else
         _introStepIndex = index + 1 < ActiveLevel.IntroSteps.Count ? index + 1 : null;
     }
 
-    private void GoToNextLevel()
+    private async Task GoToNextLevel()
     {
+        if (_caseMode)
+        {
+            var nextStep = NextIncompleteStep(_activeStepId);
+            if (nextStep is not null)
+            {
+                await SelectCaseStepAsync(nextStep.StepId);
+                return;
+            }
+            if (_caseToken is not null)
+            {
+                Navigation.NavigateTo($"/case/{Uri.EscapeDataString(_caseToken)}");
+                return;
+            }
+        }
         if (ActiveLevel is null) return;
         var index = _levels.IndexOf(ActiveLevel);
         if (index >= 0 && index < _levels.Count - 1)
@@ -1553,11 +1690,6 @@ else
             _showSuccess = false;
             if (!IsSandbox)
                 ShowLevelIntro();
-            return;
-        }
-        if (_caseMode && _caseToken is not null)
-        {
-            Navigation.NavigateTo($"/case/{Uri.EscapeDataString(_caseToken)}");
             return;
         }
         Navigation.NavigateTo(Navigation.BaseUri);

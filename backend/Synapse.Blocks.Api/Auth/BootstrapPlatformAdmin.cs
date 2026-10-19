@@ -39,6 +39,9 @@ public sealed class BootstrapPlatformAdmin(
             if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(error => error.Description)));
         }
         if (!await users.IsInRoleAsync(admin, PlatformAdminRole)) await users.AddToRoleAsync(admin, PlatformAdminRole);
+        if (!await users.IsInRoleAsync(admin, TeacherRole)) await users.AddToRoleAsync(admin, TeacherRole);
+        await scope.ServiceProvider.GetRequiredService<Synapse.Blocks.Api.MarkdownPages.MarkdownDemoSeeder>()
+            .EnsureSeededAsync(admin.Id, cancellationToken);
         logger.LogInformation("Platform administrator account is ready.");
     }
 

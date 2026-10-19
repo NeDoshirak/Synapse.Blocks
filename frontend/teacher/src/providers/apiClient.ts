@@ -14,7 +14,7 @@ export function createApiClient() {
     async request(url: string, options: ApiOptions = {}) {
       const method = (options.method ?? "GET").toUpperCase();
       const headers = new Headers(options.headers);
-      if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+      if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
       if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("RequestVerificationToken", await csrf());
       const response = await fetch(url, { ...options, headers, credentials: "include" });
       if (response.status === 204) return undefined;

@@ -4,11 +4,15 @@
 @inject NavigationManager Navigation
 
 <div class="app-shell">
-    <header class="app-header">
+    <header class="app-header @(IsGamePage ? "game-app-header" : "") @(IsCaseMode ? "case-game-app-header" : "")">
         <a class="brand" href="game">
             <span class="brand-mark" aria-hidden="true"></span>
             <span><b>ФВС/Код</b></span>
         </a>
+        @if (IsGamePage)
+        {
+            <div class="game-header-level-slot"><SectionOutlet SectionName="GameHeaderLevel" /></div>
+        }
         @if (!IsCaseMode) { <NavMenu /> }
         @if (!IsCaseMode) { <button type="button"
                 class="runtime-badge player-reset"
@@ -16,6 +20,10 @@
                 @onclick="ResetPlayerAsync">
             <i></i> @(_resetting ? "Сброс…" : "Сбросить прогресс")
         </button> }
+        @if (IsGamePage)
+        {
+            <div class="game-header-clear-slot"><SectionOutlet SectionName="GameHeaderClear" /></div>
+        }
     </header>
     <main class="app-main">
         @Body
@@ -24,6 +32,14 @@
 
 @code {
     private bool _resetting;
+    private bool IsGamePage
+    {
+        get
+        {
+            var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].TrimEnd('/');
+            return route.Equals("game", StringComparison.OrdinalIgnoreCase);
+        }
+    }
     private bool IsCaseMode => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("case/", StringComparison.OrdinalIgnoreCase)
         || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("game?case=", StringComparison.OrdinalIgnoreCase);
 

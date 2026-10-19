@@ -10,8 +10,9 @@ public sealed record PlatformCaseDto(
     string Description,
     bool IsPublished,
     bool Archived,
+    CaseProgressionMode ProgressionMode,
     IReadOnlyList<CaseSectionDto> Sections,
-    int LevelCount,
+    int ItemCount,
     bool ShareLinkActive,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
@@ -21,4 +22,5 @@ public sealed record PlatformCreateCaseRequest(
     string CaseType,
     string Title,
     string Description,
-    IReadOnlyList<CaseSectionInput> Sections);
+    IReadOnlyList<CaseSectionInput> Sections,
+    CaseProgressionMode ProgressionMode = CaseProgressionMode.Sequential);

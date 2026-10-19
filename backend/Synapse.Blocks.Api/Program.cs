@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Auth;
@@ -11,6 +12,7 @@ using Synapse.Blocks.Api.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Endpoints;
 using Synapse.Blocks.Api.Levels;
+using Synapse.Blocks.Api.MarkdownPages;
 using Synapse.Blocks.Api.Operations;
 using Synapse.Blocks.Api.Reports;
 using Synapse.Blocks.Api.Health;
@@ -82,6 +84,8 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SameSite = SameSiteMode.Strict;
     options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
+builder.Services.Configure<FormOptions>(options =>
+    options.MultipartBodyLengthLimit = MarkdownAssetService.MaximumAssetBytes + 256 * 1024);
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<PlatformAuditEventService>();
 builder.Services.AddScoped<TeacherAccountService>();
@@ -95,6 +99,10 @@ builder.Services.AddScoped<AttemptService>();
 builder.Services.AddScoped<ProgramEvaluationService>();
 builder.Services.AddScoped<CaseArchiveService>();
 builder.Services.AddScoped<CaseReportService>();
+builder.Services.AddScoped<MarkdownPageService>();
+builder.Services.AddScoped<MarkdownAssetService>();
+builder.Services.AddSingleton<MarkdownRenderer>();
+builder.Services.AddScoped<MarkdownDemoSeeder>();
 builder.Services.AddSingleton<BlockProgramRunner>();
 builder.Services.AddHostedService<BootstrapPlatformAdmin>();
 builder.Services.AddHealthChecks()
@@ -120,6 +128,8 @@ app.MapPlatformCaseEndpoints();
 app.MapStudentCaseEndpoints();
 app.MapStudentAttemptEndpoints();
 app.MapTeacherReportEndpoints();
+app.MapTeacherMarkdownPageEndpoints();
+app.MapPlatformMarkdownPageEndpoints();
 
 app.Run();
 

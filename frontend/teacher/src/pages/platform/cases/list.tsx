@@ -42,7 +42,7 @@ export default function PlatformCasesList() {
         <Select allowClear value={state} onChange={setState} placeholder="Любой статус" options={[{ value: "draft", label: "Черновик" }, { value: "published", label: "Опубликован" }, { value: "archived", label: "В архиве" }]} />
       </div>
       <Table<PlatformCase> rowKey="id" loading={loading} dataSource={rows} pagination={{ pageSize: 12, showSizeChanger: false }} locale={{ emptyText: "Наборы не найдены" }} columns={[
-        { title: "Набор", dataIndex: "title", render: (title: string, item) => <div><Typography.Text strong>{title}</Typography.Text><br /><Typography.Text type="secondary">{item.levelCount} заданий · обновлён {new Date(item.updatedAt).toLocaleDateString("ru-RU")}</Typography.Text></div> },
+        { title: "Набор", dataIndex: "title", render: (title: string, item) => <div><Typography.Text strong>{title}</Typography.Text><br /><Typography.Text type="secondary">{item.itemCount} материалов · обновлён {new Date(item.updatedAt).toLocaleDateString("ru-RU")}</Typography.Text></div> },
         { title: "Владелец", render: (_, item) => <div><Typography.Text strong>{item.ownerName}</Typography.Text><br /><Typography.Text type="secondary">{item.ownerEmail}</Typography.Text></div> },
         { title: "Статус", render: (_, item) => <Tag color={item.archived ? "default" : item.isPublished ? "green" : "orange"}>{item.archived ? "В архиве" : item.isPublished ? "Опубликован" : "Черновик"}</Tag> },
         { title: "QR", render: (_, item) => item.shareLinkActive ? <Tag color="blue">Активен</Tag> : <Typography.Text type="secondary">Нет ссылки</Typography.Text> },

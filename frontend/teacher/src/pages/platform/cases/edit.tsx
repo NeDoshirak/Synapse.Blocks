@@ -5,13 +5,21 @@ import { Link, useNavigate, useParams } from "react-router";
 import { CaseSectionsEditor } from "../../../components/cases/CaseSectionsEditor";
 import { canPublishCase, createCaseSection } from "../../../resources/caseOrder";
 import { apiClient } from "../../../providers/apiClient";
-import type { CaseSectionDraft, PlatformCase, TeacherAccount, TeacherLevel } from "../../../types/api";
+import type { CaseProgressionMode, CaseSectionDraft, MarkdownPage, PlatformCase, TeacherAccount, TeacherLevel } from "../../../types/api";
 
 function toDrafts(item: PlatformCase): CaseSectionDraft[] {
   return item.sections.slice().sort((a, b) => a.order - b.order).map(section => ({
     clientId: section.id,
     title: section.title ?? "",
-    levels: section.levels.slice().sort((a, b) => a.order - b.order).map(level => ({ levelVersionId: level.levelVersionId, displayTitle: level.displayTitle ?? "" })),
+    items: section.items.slice().sort((a, b) => a.order - b.order).map(content => ({
+      clientId: content.id,
+      kind: content.kind,
+      ...(content.levelVersionId ? { levelVersionId: content.levelVersionId } : {}),
+      ...(content.markdownPageVersionId ? { markdownPageVersionId: content.markdownPageVersionId } : {}),
+      displayTitle: content.displayTitle ?? "",
+      canonicalTitle: content.title,
+      isBuiltIn: content.isBuiltIn,
+    })),
   }));
 }
 
@@ -21,10 +29,12 @@ export default function PlatformCaseEdit({ create = false }: { create?: boolean 
   const [teachers, setTeachers] = useState<TeacherAccount[]>([]);
   const [ownerId, setOwnerId] = useState<string>();
   const [levels, setLevels] = useState<TeacherLevel[]>([]);
+  const [markdownPages, setMarkdownPages] = useState<MarkdownPage[]>([]);
   const [item, setItem] = useState<PlatformCase>();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sections, setSections] = useState<CaseSectionDraft[]>(() => [createCaseSection()]);
+  const [progressionMode, setProgressionMode] = useState<CaseProgressionMode>("Sequential");
   const [shareUrl, setShareUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(!create);
@@ -38,27 +48,29 @@ export default function PlatformCaseEdit({ create = false }: { create?: boolean 
       void apiClient.request(`/api/platform/cases/${encodeURIComponent(id)}`)
         .then(value => {
           const loaded = value as PlatformCase;
-          setItem(loaded); setOwnerId(loaded.ownerId); setTitle(loaded.title); setDescription(loaded.description); setSections(toDrafts(loaded));
+          setItem(loaded); setOwnerId(loaded.ownerId); setTitle(loaded.title); setDescription(loaded.description); setSections(toDrafts(loaded)); setProgressionMode(loaded.progressionMode);
         })
         .catch(reason => setError(reason instanceof Error ? reason.message : "Набор не найден."))
         .finally(() => setLoading(false));
     }
   }, [create, id]);
   useEffect(() => {
-    if (!ownerId) { setLevels([]); return; }
+    if (!ownerId) { setLevels([]); setMarkdownPages([]); return; }
     let active = true;
     setLevelsLoading(true);
     void apiClient.request(`/api/platform/teachers/${encodeURIComponent(ownerId)}/levels`)
       .then(value => { if (active) setLevels(value as TeacherLevel[]); })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Не удалось загрузить уровни этого преподавателя."); })
       .finally(() => { if (active) setLevelsLoading(false); });
+    void apiClient.request(`/api/platform/teachers/${encodeURIComponent(ownerId)}/markdown-pages`)
+      .then(value => { if (active) setMarkdownPages(value as MarkdownPage[]); })
+      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Не удалось загрузить Markdown-страницы этого преподавателя."); });
     return () => { active = false; };
   }, [ownerId]);
 
   const canSave = useMemo(() => canPublishCase(title, sections), [title, sections]);
-  const canonicalTitleByVersion = useMemo(() => Object.fromEntries((item?.sections ?? []).flatMap(section => section.levels.map(level => [level.levelVersionId, level.title] as const))), [item]);
   const owner = teachers.find(teacher => teacher.id === ownerId);
-  const body = () => ({ caseType: "orderedLevels", title, description, sections: sections.map(section => ({ title: section.title.trim() || null, levels: section.levels.map(level => ({ levelVersionId: level.levelVersionId, displayTitle: level.displayTitle.trim() || null })) })) });
+  const body = () => ({ caseType: "orderedLevels", title, description, progressionMode, sections: sections.map(section => ({ title: section.title.trim() || null, items: section.items.map(content => ({ kind: content.kind, levelVersionId: content.levelVersionId ?? null, markdownPageVersionId: content.markdownPageVersionId ?? null, displayTitle: content.displayTitle.trim() || null })) })) });
 
   const persist = async () => {
     if (!ownerId) throw new Error("Выберите преподавателя-владельца набора.");
@@ -72,7 +84,7 @@ export default function PlatformCaseEdit({ create = false }: { create?: boolean 
     setBusy(true); setError("");
     try {
       const saved = await persist();
-      setItem(saved); setOwnerId(saved.ownerId); setSections(toDrafts(saved));
+      setItem(saved); setOwnerId(saved.ownerId); setSections(toDrafts(saved)); setProgressionMode(saved.progressionMode);
       if (create) navigate(`/platform/cases/${saved.id}`, { replace: true });
       else message.success("Набор сохранён");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось сохранить набор."); }
@@ -85,7 +97,7 @@ export default function PlatformCaseEdit({ create = false }: { create?: boolean 
     try {
       await persist();
       const published = await apiClient.request(`/api/platform/cases/${item.id}/publish`, { method: "POST" }) as PlatformCase;
-      setItem(published); setSections(toDrafts(published)); message.success("Набор опубликован");
+      setItem(published); setSections(toDrafts(published)); setProgressionMode(published.progressionMode); message.success("Набор опубликован");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось опубликовать набор."); }
     finally { setBusy(false); }
   };
@@ -135,10 +147,10 @@ export default function PlatformCaseEdit({ create = false }: { create?: boolean 
     {item?.archived && <Alert type="warning" showIcon message="Набор в архиве. Попытки и отчёты сохранены, QR-ссылка закрыта." style={{ marginBottom: 16 }} />}
     <Card className="platform-table-card" title={<Typography.Title level={4}>Содержание набора</Typography.Title>}>
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
-        {create && <div><Typography.Text strong>Преподаватель-владелец</Typography.Text><Select showSearch optionFilterProp="label" value={ownerId} onChange={value => { setOwnerId(value); setSections([createCaseSection()]); }} placeholder="Выберите преподавателя" style={{ width: "100%", marginTop: 8 }} size="large" options={teachers.map(teacher => ({ value: teacher.id, label: `${teacher.displayName} · ${teacher.email}${teacher.isActive ? "" : " (заблокирован)"}` }))} /></div>}
+        {create && <div><Typography.Text strong>Преподаватель-владелец</Typography.Text><Select showSearch optionFilterProp="label" value={ownerId} onChange={value => { setOwnerId(value); setSections([createCaseSection()]); setProgressionMode("Sequential"); }} placeholder="Выберите преподавателя" style={{ width: "100%", marginTop: 8 }} size="large" options={teachers.map(teacher => ({ value: teacher.id, label: `${teacher.displayName} · ${teacher.email}${teacher.isActive ? "" : " (заблокирован)"}` }))} /></div>}
         <Input size="large" placeholder="Название набора" value={title} disabled={item?.archived} onChange={event => setTitle(event.target.value)} maxLength={200} />
         <Input.TextArea rows={2} placeholder="Описание для учеников" value={description} disabled={item?.archived} onChange={event => setDescription(event.target.value)} maxLength={2000} />
-        {levelsLoading ? <Spin /> : ownerId ? <CaseSectionsEditor levels={levels} sections={sections} canonicalTitleByVersion={canonicalTitleByVersion} disabled={item?.archived} onChange={setSections} /> : <Alert type="info" message="Сначала выберите преподавателя, чтобы загрузить его уровни." />}
+        {levelsLoading ? <Spin /> : ownerId ? <CaseSectionsEditor levels={levels} markdownPages={markdownPages} sections={sections} progressionMode={progressionMode} onProgressionModeChange={setProgressionMode} disabled={item?.archived} onChange={setSections} /> : <Alert type="info" message="Сначала выберите преподавателя, чтобы загрузить его материалы." />}
         <Space wrap>
           {item?.archived
             ? <Button type="primary" onClick={restore} loading={busy}>Восстановить набор</Button>

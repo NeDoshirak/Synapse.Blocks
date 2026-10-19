@@ -14,6 +14,7 @@ public sealed class CaseReportService(AppDbContext db)
         var participants = await db.Participants.AsNoTracking()
             .Where(participant => participant.CaseId == caseId && participant.Case.OwnerId == ownerId)
             .Include(participant => participant.Attempts).ThenInclude(attempt => attempt.LevelResults)
+            .Include(participant => participant.Attempts).ThenInclude(attempt => attempt.Steps)
             .OrderBy(participant => participant.CreatedAt)
             .ToListAsync(cancellationToken);
         var rows = participants.GroupBy(participant => participant.NormalizedName)
@@ -26,9 +27,11 @@ public sealed class CaseReportService(AppDbContext db)
                         attempt.Status,
                         attempt.StartedAt,
                         attempt.CompletedAt,
-                        attempt.LevelResults.Count(result => result.Completed)))
+                        attempt.Steps.Count > 0
+                            ? attempt.Steps.Count(step => step.Completed)
+                            : attempt.LevelResults.Count(result => result.Completed)))
                     .ToArray();
-                return new CaseParticipantReportDto(group.First().DisplayName, attempts.Length == 0 ? 0 : attempts.Max(attempt => attempt.CompletedLevelCount), attempts);
+                return new CaseParticipantReportDto(group.First().DisplayName, attempts.Length == 0 ? 0 : attempts.Max(attempt => attempt.CompletedStepCount), attempts);
             })
             .OrderBy(participant => participant.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToArray();

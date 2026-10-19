@@ -20,7 +20,7 @@
             <span class="case-entry-eyebrow">ФВС/КОД · УЧЕБНЫЙ МАРШРУТ</span>
             <div class="case-entry-icon">✳</div>
             <h1>@_case.Title</h1>
-            <p>В наборе @_case.Levels.Count @(AssignmentWord(_case.Levels.Count)). Введите своё имя, чтобы начать.</p>
+            <p>В наборе @CaseItemCount @(AssignmentWord(CaseItemCount)). Введите своё имя, чтобы начать.</p>
             @if (!string.IsNullOrEmpty(_error)) { <div class="case-entry-error" role="alert">@_error</div> }
             <form @onsubmit="StartAsync" @onsubmit:preventDefault>
                 <label for="student-name">Ваше имя</label>
@@ -41,6 +41,8 @@
     private bool _loading = true;
     private bool _unavailable;
     private bool _starting;
+
+    private int CaseItemCount => _case?.Steps.Count > 0 ? _case.Steps.Count : _case?.Levels.Count ?? 0;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -87,5 +89,5 @@
     }
 
     private void Navigate(StudentAttemptDto attempt) => Navigation.NavigateTo($"/game?case={Uri.EscapeDataString(Token)}&attempt={attempt.AttemptId}");
-    private static string AssignmentWord(int count) => count switch { 1 => "задание", 2 or 3 or 4 => "задания", _ => "заданий" };
+    private static string AssignmentWord(int count) => count switch { 1 => "материал", 2 or 3 or 4 => "материала", _ => "материалов" };
 }

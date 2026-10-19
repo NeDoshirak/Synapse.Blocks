@@ -52,7 +52,7 @@ public static class StudentAttemptEndpoints
             if (!await AntiforgeryValidation.IsValidAsync(antiforgery, context)) return Results.BadRequest();
             var sharedCase = await links.ResolveCaseAsync(token, ct);
             if (sharedCase is null) return Results.NotFound(new { error = "Case unavailable." });
-            var attempt = await attempts.StartAttemptAsync(sharedCase.Id, context.Request.Cookies[ContinuationCookie], ct);
+            var attempt = await attempts.StartAttemptAsync(sharedCase.Id, token, context.Request.Cookies[ContinuationCookie], ct);
             return attempt is null ? Results.NotFound() : Results.Created($"/api/student/cases/{token}/attempts/{attempt.AttemptId}", attempt);
         });
 
@@ -61,8 +61,45 @@ public static class StudentAttemptEndpoints
         {
             var sharedCase = await links.ResolveCaseAsync(token, ct);
             if (sharedCase is null) return Results.NotFound(new { error = "Case unavailable." });
-            var attempt = await attempts.GetCurrentAsync(sharedCase.Id, context.Request.Cookies[ContinuationCookie], ct);
+            var attempt = await attempts.GetCurrentAsync(sharedCase.Id, token, context.Request.Cookies[ContinuationCookie], ct);
             return attempt is null ? Results.NotFound() : Results.Ok(attempt);
+        });
+
+        group.MapPost("/{token}/attempts/{attemptId:guid}/steps/{stepId:guid}/complete", async (
+            string token,
+            Guid attemptId,
+            Guid stepId,
+            HttpContext context,
+            IAntiforgery antiforgery,
+            ShareLinkService links,
+            AttemptService attempts,
+            CancellationToken ct) =>
+        {
+            if (!await AntiforgeryValidation.IsValidAsync(antiforgery, context)) return Results.BadRequest();
+            var sharedCase = await links.ResolveCaseAsync(token, ct);
+            if (sharedCase is null) return Results.NotFound(new { error = "Case unavailable." });
+            try
+            {
+                var attempt = await attempts.CompleteMarkdownStepAsync(sharedCase.Id, attemptId, stepId, token,
+                    context.Request.Cookies[ContinuationCookie], ct);
+                return attempt is null ? Results.NotFound() : Results.Ok(attempt);
+            }
+            catch (AttemptProgressConflictException ex) { return Results.Conflict(new { error = ex.Message }); }
+        }).WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+
+        group.MapGet("/{token}/attempts/{attemptId:guid}/assets/{assetId:guid}/content", async (
+            string token,
+            Guid attemptId,
+            Guid assetId,
+            ShareLinkService links,
+            HttpContext context,
+            CancellationToken ct) =>
+        {
+            var asset = await links.GetAttemptMarkdownAssetAsync(token, attemptId, assetId, ct);
+            if (asset is null) return Results.NotFound();
+            context.Response.Headers["Cache-Control"] = "private, max-age=86400, immutable";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return Results.File(asset.Content, asset.ContentType);
         });
 
         group.MapPost("/{token}/attempts/{attemptId:guid}/levels/{levelVersionId:guid}/evaluate", async (

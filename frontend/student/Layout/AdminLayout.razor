@@ -1,15 +1,17 @@
 @inherits LayoutComponentBase
 
 <div class="app-shell admin-shell">
-    <header class="app-header admin-header">
+    <header class="app-header admin-header game-app-header">
         <a class="brand" href="game">
             <span class="brand-mark admin-mark" aria-hidden="true"></span>
             <span><b>СИНАПС</b><small>ПЕСОЧНИЦА</small></span>
         </a>
+        <div class="game-header-level-slot"><SectionOutlet SectionName="GameHeaderLevel" /></div>
         <nav class="main-nav admin-nav" aria-label="Панель разработчика">
             <NavLink href="sandbox"><b>Песочница</b></NavLink>
         </nav>
         <a class="runtime-badge developer-exit" href="/admin/">← Кабинет учителя</a>
+        <div class="game-header-clear-slot"><SectionOutlet SectionName="GameHeaderClear" /></div>
     </header>
     <main class="app-main">
         @Body

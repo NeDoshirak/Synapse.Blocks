@@ -149,7 +149,8 @@ public sealed class PlatformCaseService(
 
     private IQueryable<TeacherCase> CaseQuery() => db.TeacherCases.AsNoTracking()
         .Include(item => item.Owner)
-        .Include(item => item.Sections).ThenInclude(section => section.Levels).ThenInclude(level => level.LevelVersion)
+        .Include(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.LevelVersion)
+        .Include(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.MarkdownPageVersion).ThenInclude(version => version!.Page)
         .Include(item => item.ShareLinks);
 
     private async Task<ApplicationUser?> FindTeacherAsync(string ownerId)
@@ -164,12 +165,15 @@ public sealed class PlatformCaseService(
             section.Id,
             section.Title,
             section.Order,
-            section.Levels.OrderBy(level => level.Order).Select(level => new CaseLevelDto(
-                level.LevelId,
-                level.LevelVersionId,
-                level.Order,
-                level.LevelVersion.Title,
-                level.DisplayTitle)).ToArray())).ToArray();
+            section.Items.OrderBy(content => content.Order).Select(content => new CaseContentItemDto(
+                content.Id,
+                content.Kind,
+                content.LevelVersionId,
+                content.MarkdownPageVersionId,
+                content.Order,
+                content.LevelVersion?.Title ?? content.MarkdownPageVersion?.Title ?? "",
+                content.DisplayTitle,
+                content.MarkdownPageVersion?.Page.IsBuiltIn ?? false)).ToArray())).ToArray();
         var ownerName = $"{item.Owner.FirstName} {item.Owner.LastName}".Trim();
         if (string.IsNullOrWhiteSpace(ownerName)) ownerName = string.IsNullOrWhiteSpace(item.Owner.DisplayName) ? item.Owner.Email ?? "Преподаватель" : item.Owner.DisplayName;
         return new PlatformCaseDto(
@@ -182,8 +186,9 @@ public sealed class PlatformCaseService(
             item.Description,
             item.IsPublished,
             item.Archived,
+            item.ProgressionMode,
             sections,
-            sections.Sum(section => section.Levels.Count),
+            sections.Sum(section => section.Items.Count),
             item.ShareLinks.Any(link => link.RevokedAt is null),
             item.CreatedAt,
             item.UpdatedAt);

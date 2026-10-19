@@ -13,11 +13,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<TeacherLevel> TeacherLevels => Set<TeacherLevel>();
     public DbSet<TeacherCase> TeacherCases => Set<TeacherCase>();
     public DbSet<CaseSection> CaseSections => Set<CaseSection>();
-    public DbSet<CaseLevel> CaseLevels => Set<CaseLevel>();
+    public DbSet<CaseContentItem> CaseContentItems => Set<CaseContentItem>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<Participant> Participants => Set<Participant>();
     public DbSet<Attempt> Attempts => Set<Attempt>();
     public DbSet<AttemptLevelResult> AttemptLevelResults => Set<AttemptLevelResult>();
+    public DbSet<MarkdownPage> MarkdownPages => Set<MarkdownPage>();
+    public DbSet<MarkdownPageVersion> MarkdownPageVersions => Set<MarkdownPageVersion>();
+    public DbSet<MarkdownAsset> MarkdownAssets => Set<MarkdownAsset>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -71,21 +74,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         teacherCase.Property(item => item.CaseType).HasMaxLength(40).IsRequired();
         teacherCase.Property(item => item.Title).HasMaxLength(200).IsRequired();
         teacherCase.Property(item => item.Description).HasMaxLength(2000).IsRequired();
+        teacherCase.Property(item => item.ProgressionMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(Synapse.Blocks.Api.Contracts.Cases.CaseProgressionMode.Sequential);
         teacherCase.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
-        teacherCase.HasMany(item => item.Levels).WithOne(level => level.Case).HasForeignKey(level => level.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.Sections).WithOne(section => section.Case).HasForeignKey(section => section.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany(item => item.ShareLinks).WithOne(link => link.Case).HasForeignKey(link => link.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany<Participant>().WithOne(participant => participant.Case).HasForeignKey(participant => participant.CaseId).OnDelete(DeleteBehavior.Restrict);
         teacherCase.HasMany<Attempt>().WithOne(attempt => attempt.Case).HasForeignKey(attempt => attempt.CaseId).OnDelete(DeleteBehavior.Restrict);
-
-        var caseLevel = modelBuilder.Entity<CaseLevel>();
-        caseLevel.ToTable("case_levels");
-        caseLevel.HasKey(item => item.Id);
-        caseLevel.HasIndex(item => item.CaseId);
-        caseLevel.HasIndex(item => new { item.SectionId, item.Order }).IsUnique();
-        caseLevel.Property(item => item.DisplayTitle).HasMaxLength(200);
-        caseLevel.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
-        caseLevel.HasOne(item => item.Section).WithMany(section => section.Levels).HasForeignKey(item => item.SectionId).OnDelete(DeleteBehavior.Restrict);
 
         var caseSection = modelBuilder.Entity<CaseSection>();
         caseSection.ToTable("case_sections");
@@ -93,6 +87,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         caseSection.HasIndex(item => item.CaseId);
         caseSection.Property(item => item.Title).HasMaxLength(120);
         caseSection.HasOne(item => item.Case).WithMany(item => item.Sections).HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
+        caseSection.HasMany(item => item.Items).WithOne(content => content.Section).HasForeignKey(content => content.SectionId).OnDelete(DeleteBehavior.Restrict);
+
+        var caseContentItem = modelBuilder.Entity<CaseContentItem>();
+        caseContentItem.ToTable("case_content_items", table => table.HasCheckConstraint(
+            "CK_case_content_items_kind_reference",
+            "(\"Kind\" = 'level' AND \"LevelVersionId\" IS NOT NULL AND \"MarkdownPageVersionId\" IS NULL) OR (\"Kind\" = 'markdown' AND \"LevelVersionId\" IS NULL AND \"MarkdownPageVersionId\" IS NOT NULL)"));
+        caseContentItem.HasKey(item => item.Id);
+        caseContentItem.HasIndex(item => item.CaseId);
+        caseContentItem.HasIndex(item => new { item.SectionId, item.Order }).IsUnique();
+        caseContentItem.HasIndex(item => new { item.CaseId, item.LevelVersionId }).IsUnique().HasFilter("\"Kind\" = 'level'");
+        caseContentItem.Property(item => item.Kind).HasMaxLength(20).IsRequired();
+        caseContentItem.Property(item => item.DisplayTitle).HasMaxLength(200);
+        caseContentItem.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
+        caseContentItem.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
+        caseContentItem.HasOne(item => item.MarkdownPageVersion).WithMany().HasForeignKey(item => item.MarkdownPageVersionId).OnDelete(DeleteBehavior.Restrict);
 
         var shareLink = modelBuilder.Entity<ShareLink>();
         shareLink.ToTable("share_links");
@@ -117,15 +126,59 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         attempt.HasKey(item => item.Id);
         attempt.HasIndex(item => new { item.CaseId, item.ParticipantId, item.StartedAt });
         attempt.Property(item => item.Status).HasMaxLength(20).IsRequired();
+        attempt.Property(item => item.ProgressionMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(Synapse.Blocks.Api.Contracts.Cases.CaseProgressionMode.Sequential);
         attempt.Property(item => item.LevelVersionIdsJson).HasColumnType("jsonb").IsRequired();
         attempt.Property(item => item.LevelPresentationJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb").IsRequired();
         attempt.HasOne(item => item.Case).WithMany().HasForeignKey(item => item.CaseId).OnDelete(DeleteBehavior.Restrict);
         attempt.HasMany(item => item.LevelResults).WithOne(result => result.Attempt).HasForeignKey(result => result.AttemptId).OnDelete(DeleteBehavior.Restrict);
+        attempt.HasMany(item => item.Steps).WithOne(step => step.Attempt).HasForeignKey(step => step.AttemptId).OnDelete(DeleteBehavior.Restrict);
 
         var attemptResult = modelBuilder.Entity<AttemptLevelResult>();
         attemptResult.ToTable("attempt_level_results");
         attemptResult.HasKey(item => item.Id);
         attemptResult.HasIndex(item => new { item.AttemptId, item.LevelVersionId }).IsUnique();
         attemptResult.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
+
+        var attemptStep = modelBuilder.Entity<AttemptStep>();
+        attemptStep.ToTable("attempt_steps", table => table.HasCheckConstraint(
+            "CK_attempt_steps_kind_reference",
+            "(\"Kind\" = 'level' AND \"LevelVersionId\" IS NOT NULL AND \"MarkdownPageVersionId\" IS NULL AND \"Markdown\" IS NULL) OR (\"Kind\" = 'markdown' AND \"LevelVersionId\" IS NULL AND \"MarkdownPageVersionId\" IS NOT NULL AND \"Markdown\" IS NOT NULL)"));
+        attemptStep.HasKey(item => item.Id);
+        attemptStep.HasIndex(item => new { item.AttemptId, item.Order }).IsUnique();
+        attemptStep.HasIndex(item => new { item.AttemptId, item.SourceItemId }).IsUnique();
+        attemptStep.Property(item => item.Kind).HasMaxLength(20).IsRequired();
+        attemptStep.Property(item => item.SectionTitle).HasMaxLength(120);
+        attemptStep.Property(item => item.Title).HasMaxLength(200).IsRequired();
+        attemptStep.Property(item => item.Markdown).HasMaxLength(102400);
+        attemptStep.HasOne(item => item.LevelVersion).WithMany().HasForeignKey(item => item.LevelVersionId).OnDelete(DeleteBehavior.Restrict);
+        attemptStep.HasOne(item => item.MarkdownPageVersion).WithMany().HasForeignKey(item => item.MarkdownPageVersionId).OnDelete(DeleteBehavior.Restrict);
+
+        var markdownPage = modelBuilder.Entity<MarkdownPage>();
+        markdownPage.ToTable("markdown_pages");
+        markdownPage.HasKey(item => item.Id);
+        markdownPage.HasIndex(item => new { item.OwnerId, item.IsArchived, item.Title });
+        markdownPage.HasIndex(item => item.BuiltInKey).IsUnique();
+        markdownPage.Property(item => item.Title).HasMaxLength(200).IsRequired();
+        markdownPage.Property(item => item.BuiltInKey).HasMaxLength(100);
+        markdownPage.Property(item => item.CurrentVersionId).IsConcurrencyToken();
+        markdownPage.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        markdownPage.HasMany(item => item.Versions).WithOne(version => version.Page).HasForeignKey(version => version.PageId).OnDelete(DeleteBehavior.Restrict);
+        markdownPage.HasOne(item => item.CurrentVersion).WithMany().HasForeignKey(item => item.CurrentVersionId).OnDelete(DeleteBehavior.Restrict);
+
+        var markdownPageVersion = modelBuilder.Entity<MarkdownPageVersion>();
+        markdownPageVersion.ToTable("markdown_page_versions");
+        markdownPageVersion.HasKey(item => item.Id);
+        markdownPageVersion.HasIndex(item => new { item.PageId, item.Version }).IsUnique();
+        markdownPageVersion.Property(item => item.Title).HasMaxLength(200).IsRequired();
+        markdownPageVersion.Property(item => item.Markdown).HasMaxLength(102400).IsRequired();
+
+        var markdownAsset = modelBuilder.Entity<MarkdownAsset>();
+        markdownAsset.ToTable("markdown_assets", table => table.HasCheckConstraint(
+            "CK_markdown_assets_length", "\"Length\" > 0 AND \"Length\" <= 10485760"));
+        markdownAsset.HasKey(item => item.Id);
+        markdownAsset.HasIndex(item => item.OwnerId);
+        markdownAsset.Property(item => item.ContentType).HasMaxLength(20).IsRequired();
+        markdownAsset.Property(item => item.Content).HasColumnType("bytea").IsRequired();
+        markdownAsset.HasOne(item => item.Owner).WithMany().HasForeignKey(item => item.OwnerId).OnDelete(DeleteBehavior.Restrict);
     }
 }

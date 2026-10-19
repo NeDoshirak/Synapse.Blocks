@@ -37,12 +37,30 @@ public sealed class StudentCaseStore(HttpClient http)
 
     public async Task<StudentAttemptDto?> ResumeAsync(string token, CancellationToken cancellationToken = default)
     {
+        var attempt = await GetCurrentAttemptAsync(token, cancellationToken);
+        return attempt?.Status == "InProgress" ? attempt : null;
+    }
+
+    public async Task<StudentAttemptDto?> GetCurrentAttemptAsync(string token, CancellationToken cancellationToken = default)
+    {
         ValidateToken(token);
         using var response = await SendAsync(HttpMethod.Get, $"api/student/cases/{Uri.EscapeDataString(token)}/attempts/current", null, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         await EnsureSuccessAsync(response);
-        var attempt = await response.Content.ReadFromJsonAsync(AppJsonSerializerContext.Default.StudentAttemptDto, cancellationToken);
-        return attempt?.Status == "InProgress" ? attempt : null;
+        return await response.Content.ReadFromJsonAsync(AppJsonSerializerContext.Default.StudentAttemptDto, cancellationToken);
+    }
+
+    public async Task<StudentAttemptDto> CompleteMarkdownStepAsync(string token, Guid attemptId, Guid stepId, CancellationToken cancellationToken = default)
+    {
+        ValidateToken(token);
+        var requestToken = await GetRequestTokenAsync(cancellationToken);
+        using var response = await SendAsync(HttpMethod.Post,
+            $"api/student/cases/{Uri.EscapeDataString(token)}/attempts/{attemptId}/steps/{stepId}/complete",
+            null, cancellationToken, requestToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) throw new HttpRequestException("Страница или попытка больше недоступна.", null, response.StatusCode);
+        if (response.StatusCode == HttpStatusCode.Conflict) throw new InvalidOperationException("Сначала завершите предыдущий шаг набора.");
+        await EnsureSuccessAsync(response);
+        return (await response.Content.ReadFromJsonAsync(AppJsonSerializerContext.Default.StudentAttemptDto, cancellationToken))!;
     }
 
     public async Task<LevelEvaluationDto> EvaluateAsync(string token, Guid attemptId, Guid levelVersionId, BlockProgram program, CancellationToken cancellationToken = default)

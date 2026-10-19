@@ -286,6 +286,7 @@ FakesAssemblies/
 node_modules/
 frontend/teacher/dist/
 frontend/teacher/*.tsbuildinfo
+frontend/student/wwwroot/lib/markdown/
 .env
 .env.*
 !.env.example

@@ -2,7 +2,7 @@ import { Authenticated, Refine, useGetIdentity, useLogout } from "@refinedev/cor
 import { ErrorComponent, ThemedLayout } from "@refinedev/antd";
 import routerProvider from "@refinedev/react-router";
 import { ConfigProvider, Button, Card, Col, Layout, Menu, Row, Spin, Typography } from "antd";
-import { AppstoreOutlined, BookOutlined, QrcodeOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined, LogoutOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, BookOutlined, QrcodeOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined, LogoutOutlined } from "@ant-design/icons";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -24,12 +24,15 @@ import PlatformTeachersPage from "./pages/platform/teachers";
 import PlatformDashboard from "./pages/platform/dashboard";
 import PlatformCasesList from "./pages/platform/cases/list";
 import PlatformCaseEdit from "./pages/platform/cases/edit";
+import MarkdownPageList from "./pages/markdown-pages/list";
+import MarkdownPageEdit from "./pages/markdown-pages/edit";
 import type { CurrentUser } from "./types/api";
 
 function Dashboard() {
   return <><Typography.Text className="eyebrow">КАБИНЕТ ПРЕПОДАВАТЕЛЯ</Typography.Text><Typography.Title level={2}>Добро пожаловать</Typography.Title><Typography.Paragraph type="secondary">Подготовьте материалы для занятия и соберите их в набор для учеников.</Typography.Paragraph><Row gutter={[18, 18]}>{[
     { title: "Каталог уровней", text: "Настройте задачи и тесты для своих занятий", icon: <BookOutlined />, href: "/levels" },
     { title: "Мои наборы", text: "Объедините задания и выдайте ссылку или QR-код классу", icon: <QrcodeOutlined />, href: "/cases" },
+    { title: "Markdown-страницы", text: "Создайте объяснение с формулами, схемами и изображениями", icon: <ReadOutlined />, href: "/markdown-pages" },
   ].map(item => <Col xs={24} md={12} key={item.title}><Card className="dashboard-card"><div className="card-icon">{item.icon}</div><Typography.Title level={4}>{item.title}</Typography.Title><Typography.Paragraph type="secondary">{item.text}</Typography.Paragraph><Button type="link" href={`/admin${item.href}`}>Открыть →</Button></Card></Col>)}</Row></>;
 }
 
@@ -47,6 +50,7 @@ function WorkspaceSidebar({ identity }: { identity: CurrentUser }) {
         { key: "/teaching", icon: <AppstoreOutlined />, label: "Мой кабинет" },
         { key: "/levels", icon: <BookOutlined />, label: "Мои уровни" },
         { key: "/cases", icon: <QrcodeOutlined />, label: "Мои наборы" },
+        { key: "/markdown-pages", icon: <ReadOutlined />, label: "Мои Markdown-страницы" },
       ],
     },
     {
@@ -64,9 +68,10 @@ function WorkspaceSidebar({ identity }: { identity: CurrentUser }) {
     { key: "/", icon: <AppstoreOutlined />, label: "Обзор" },
     { key: "/levels", icon: <BookOutlined />, label: "Уровни" },
     { key: "/cases", icon: <QrcodeOutlined />, label: "Мои наборы" },
+    { key: "/markdown-pages", icon: <ReadOutlined />, label: "Markdown-страницы" },
     { key: "/security", icon: <SafetyCertificateOutlined />, label: "Безопасность" },
   ];
-  const selected = ["/teaching", "/levels", "/cases", "/platform/teachers", "/platform/cases", "/platform/dashboard", "/security", "/"]
+  const selected = ["/teaching", "/levels", "/cases", "/markdown-pages", "/platform/teachers", "/platform/cases", "/platform/dashboard", "/security", "/"]
     .find(key => location.pathname === key || (key !== "/" && location.pathname.startsWith(`${key}/`)));
   const name = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.displayName || identity.email;
   return <Layout.Sider className="admin-sider" width={252} breakpoint="lg" collapsedWidth={0}>
@@ -115,6 +120,7 @@ export default function App() {
   <Refine authProvider={authProvider} dataProvider={dataProvider} routerProvider={routerProvider} resources={[
     { name: "levels", list: "/levels", meta: { label: "Уровни", icon: <BookOutlined /> } },
     { name: "cases", list: "/cases", meta: { label: "Наборы и QR", icon: <QrcodeOutlined /> } },
+    { name: "markdown-pages", list: "/markdown-pages", meta: { label: "Markdown-страницы", icon: <ReadOutlined /> } },
     { name: "platform/teachers", list: "/platform/teachers", meta: { label: "Преподаватели", icon: <TeamOutlined /> } },
     { name: "platform/cases", list: "/platform/cases", meta: { label: "Наборы", icon: <QrcodeOutlined /> } },
   ]} options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, title: { text: "ФВС/Код", icon: <AppstoreOutlined /> } }}>
@@ -135,6 +141,9 @@ export default function App() {
         <Route path="cases" element={<RequireRole role="Teacher"><CasesList /></RequireRole>} />
         <Route path="cases/create" element={<RequireRole role="Teacher"><CaseEdit create /></RequireRole>} />
         <Route path="cases/:id" element={<RequireRole role="Teacher"><CaseEdit /></RequireRole>} />
+        <Route path="markdown-pages" element={<RequireRole role="Teacher"><MarkdownPageList /></RequireRole>} />
+        <Route path="markdown-pages/create" element={<RequireRole role="Teacher"><MarkdownPageEdit create /></RequireRole>} />
+        <Route path="markdown-pages/:id/edit" element={<RequireRole role="Teacher"><MarkdownPageEdit /></RequireRole>} />
         <Route path="invitations" element={<RequireRole role="PlatformAdmin"><Navigate to="/platform/teachers" replace /></RequireRole>} />
         <Route path="platform/dashboard" element={<RequireRole role="PlatformAdmin"><PlatformDashboard /></RequireRole>} />
         <Route path="platform/teachers" element={<RequireRole role="PlatformAdmin"><PlatformTeachersPage /></RequireRole>} />

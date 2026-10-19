@@ -39,7 +39,7 @@ public static class PlatformCaseEndpoints
             try
             {
                 var created = await service.CreateAsync(request.OwnerId,
-                    new CreateCaseRequest(request.CaseType, request.Title, request.Description, request.Sections), actorId, ct);
+                    new CreateCaseRequest(request.CaseType, request.Title, request.Description, request.Sections, request.ProgressionMode), actorId, ct);
                 return created is null ? Results.NotFound() : Results.Created($"/api/platform/cases/{created.Id}", created);
             }
             catch (CaseValidationException ex) { return Results.UnprocessableEntity(new { errors = ex.Errors }); }

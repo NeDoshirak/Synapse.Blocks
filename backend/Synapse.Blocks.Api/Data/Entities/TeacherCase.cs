@@ -1,4 +1,5 @@
 using Synapse.Blocks.Api.Auth;
+using Synapse.Blocks.Api.Contracts.Cases;
 
 namespace Synapse.Blocks.Api.Data.Entities;
 
@@ -10,11 +11,11 @@ public sealed class TeacherCase
     public string CaseType { get; set; } = "orderedLevels";
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
+    public CaseProgressionMode ProgressionMode { get; set; } = CaseProgressionMode.Sequential;
     public bool IsPublished { get; set; }
     public bool Archived { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public List<CaseLevel> Levels { get; set; } = [];
     public List<CaseSection> Sections { get; set; } = [];
     public List<ShareLink> ShareLinks { get; set; } = [];
 }

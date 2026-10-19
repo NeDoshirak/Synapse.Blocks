@@ -37,8 +37,7 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
         if (attempt is null) return null;
 
         var orderedVersionIds = JsonSerializer.Deserialize<List<Guid>>(attempt.LevelVersionIdsJson) ?? [];
-        var levelIndex = orderedVersionIds.FindIndex(id => id == levelVersionId);
-        if (levelIndex < 0) return null;
+        if (!orderedVersionIds.Contains(levelVersionId)) return null;
         var levelSnapshot = await db.LevelVersions.SingleOrDefaultAsync(item => item.Id == levelVersionId, cancellationToken);
         if (levelSnapshot is null) return null;
         var definition = JsonSerializer.Deserialize<LevelDefinition>(levelSnapshot.DefinitionJson, JsonOptions)
@@ -48,7 +47,23 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
         var completedLevelCount = 0;
         while (completedLevelCount < orderedLevels.Length && completedIds.Contains(orderedLevels[completedLevelCount]))
             completedLevelCount++;
-        if (levelIndex > completedLevelCount) throw new AttemptProgressConflictException();
+        AttemptStep? levelStep = null;
+        if (attempt.Steps.Count > 0)
+        {
+            levelStep = attempt.Steps.SingleOrDefault(step => step.Kind == "level" && step.LevelVersionId == levelVersionId);
+            if (levelStep is null) return null;
+            if (!levelStep.Completed && attempt.ProgressionMode == Synapse.Blocks.Api.Contracts.Cases.CaseProgressionMode.Sequential)
+            {
+                var nextStep = attempt.Steps.OrderBy(step => step.Order).FirstOrDefault(step => !step.Completed);
+                if (nextStep?.Id != levelStep.Id) throw new AttemptProgressConflictException();
+            }
+        }
+        else
+        {
+            var levelIndex = orderedLevels.ToList().IndexOf(levelVersionId);
+            if (levelIndex < completedLevelCount) { /* completed legacy levels remain selectable */ }
+            else if (levelIndex > completedLevelCount) throw new AttemptProgressConflictException();
+        }
 
         var runResults = runner.RunAll(program, definition);
         var passed = runResults.Count == definition.Tests.Count && runResults.All(result => result.Passed);
@@ -65,7 +80,16 @@ public sealed class ProgramEvaluationService(AppDbContext db, AttemptService att
             result.LastSubmittedAt = DateTimeOffset.UtcNow;
         }
 
-        if (passed && levelIndex == completedLevelCount && completedLevelCount + 1 == orderedLevels.Length)
+        if (passed && levelStep is not null)
+        {
+            levelStep.Completed = true;
+            levelStep.CompletedAt ??= DateTimeOffset.UtcNow;
+        }
+
+        var isComplete = attempt.Steps.Count > 0
+            ? attempt.Steps.All(step => step.Completed)
+            : passed && completedLevelCount + 1 == orderedLevels.Length;
+        if (isComplete)
         {
             attempt.Status = "Completed";
             attempt.CompletedAt ??= DateTimeOffset.UtcNow;
@@ -97,4 +121,4 @@ public sealed class ProgramEvaluationValidationException(IReadOnlyList<string> e
 {
     public IReadOnlyList<string> Errors { get; } = errors;
 }
-public sealed class AttemptProgressConflictException() : Exception("Complete the next level in order.");
+public sealed class AttemptProgressConflictException() : Exception("Complete the next unlocked step in order.");

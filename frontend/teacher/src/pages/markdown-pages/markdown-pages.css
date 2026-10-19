@@ -1,0 +1,278 @@
+.markdown-library-page,
+.markdown-editor-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.markdown-page-heading,
+.markdown-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 14px 0 22px;
+}
+
+.markdown-page-heading .ant-typography,
+.markdown-editor-heading .ant-typography {
+  margin-bottom: 8px;
+}
+
+.markdown-page-list {
+  display: grid;
+  gap: 12px;
+}
+
+.markdown-library-card .ant-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.markdown-library-card.is-archived {
+  opacity: 0.72;
+}
+
+.markdown-library-card-copy {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.markdown-library-card-copy .ant-typography {
+  margin: 0;
+}
+
+.markdown-library-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff0e7;
+  color: #f36f29;
+  font-size: 21px;
+}
+
+.markdown-page-loading {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+}
+
+.markdown-page-error {
+  margin-bottom: 16px;
+}
+
+.markdown-editor-heading {
+  align-items: center;
+}
+
+.markdown-editor-heading .ant-typography-title {
+  margin: 4px 0;
+}
+
+.markdown-editor-card .ant-card-body {
+  padding: 20px;
+}
+
+.markdown-editor-fields {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(140px, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.markdown-editor-fields label {
+  display: grid;
+  gap: 8px;
+}
+
+.markdown-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.markdown-editor-pane {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #ebe6df;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.markdown-pane-heading {
+  display: grid;
+  gap: 3px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee9e3;
+  background: #faf9f6;
+}
+
+.markdown-pane-heading .ant-typography {
+  margin: 0;
+}
+
+.markdown-source-editor {
+  display: flex;
+  min-height: 620px;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.markdown-toolbar {
+  margin-bottom: 10px;
+}
+
+.markdown-toolbar .ant-btn {
+  min-width: 32px;
+}
+
+.markdown-source-textarea {
+  width: 100%;
+  min-height: 560px;
+  flex: 1;
+  resize: vertical;
+  border: 1px solid #e7e1d9;
+  border-radius: 8px;
+  outline: none;
+  background: #fffdfb;
+  padding: 14px;
+  color: #272521;
+  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  tab-size: 2;
+}
+
+.markdown-source-textarea:focus {
+  border-color: #f36f29;
+  box-shadow: 0 0 0 2px rgb(243 111 41 / 13%);
+}
+
+.markdown-byte-count {
+  align-self: flex-end;
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.markdown-byte-count.is-over-limit {
+  color: #c9362b;
+}
+
+.markdown-preview-shell {
+  position: relative;
+  min-height: 620px;
+  padding: 18px;
+  overflow: auto;
+  color: #292722;
+  line-height: 1.7;
+}
+
+.markdown-preview-state,
+.markdown-preview-error {
+  margin: 0 0 12px;
+  color: #88837c;
+  font-size: 13px;
+}
+
+.markdown-preview-error {
+  color: #c9362b;
+}
+
+.markdown-preview-content {
+  overflow-wrap: anywhere;
+}
+
+.markdown-preview-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.markdown-preview-content table {
+  width: 100%;
+  margin: 16px 0;
+  border-collapse: collapse;
+}
+
+.markdown-preview-content th,
+.markdown-preview-content td {
+  padding: 8px 10px;
+  border: 1px solid #e6e0d9;
+  text-align: left;
+}
+
+.markdown-preview-content th {
+  background: #faf6f1;
+}
+
+.markdown-preview-content blockquote {
+  margin: 14px 0;
+  padding: 8px 14px;
+  border-left: 3px solid #f36f29;
+  background: #fff8f2;
+}
+
+.markdown-preview-content pre {
+  max-width: 100%;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f6f4f1;
+}
+
+.markdown-preview-content input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: #f36f29;
+}
+
+.markdown-preview-content .mermaid {
+  max-width: 100%;
+  margin: 16px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.formula-toolbar-icon,
+.diagram-toolbar-icon {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .markdown-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .markdown-source-editor,
+  .markdown-preview-shell {
+    min-height: 420px;
+  }
+
+  .markdown-source-textarea {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 640px) {
+  .markdown-library-page,
+  .markdown-editor-page {
+    padding: 12px;
+  }
+
+  .markdown-page-heading,
+  .markdown-editor-heading,
+  .markdown-library-card .ant-card-body {
+    flex-direction: column;
+  }
+
+  .markdown-editor-fields {
+    grid-template-columns: 1fr;
+  }
+}

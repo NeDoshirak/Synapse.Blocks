@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Contracts.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Data.Entities;
+using Synapse.Blocks.Api.MarkdownPages;
+using Synapse.Blocks.Api.Contracts.Students;
 using Synapse.Blocks.Models;
 
 namespace Synapse.Blocks.Api.Cases;
@@ -15,10 +17,7 @@ public sealed class CaseService(AppDbContext db)
 
     public async Task<IReadOnlyList<TeacherCaseDto>> ListAsync(string ownerId, CancellationToken cancellationToken = default)
     {
-        var items = await db.TeacherCases.AsNoTracking()
-            .Include(item => item.Sections).ThenInclude(section => section.Levels).ThenInclude(level => level.LevelVersion)
-            .Include(item => item.ShareLinks)
-            .Where(item => item.OwnerId == ownerId)
+        var items = await OwnedCaseQuery(ownerId)
             .OrderByDescending(item => item.CreatedAt)
             .ToListAsync(cancellationToken);
         return items.Select(ToTeacherDto).ToArray();
@@ -32,13 +31,15 @@ public sealed class CaseService(AppDbContext db)
 
     public async Task<TeacherCaseDto> CreateAsync(string ownerId, CreateCaseRequest request, CancellationToken cancellationToken = default)
     {
-        var sections = await ValidateAndLoadSectionsAsync(ownerId, request.CaseType, request.Title, request.Description, request.Sections, cancellationToken);
+        var sections = await ValidateAndLoadSectionsAsync(ownerId, request.CaseType, request.Title, request.Description,
+            request.Sections, request.ProgressionMode, cancellationToken);
         var entity = new TeacherCase
         {
             OwnerId = ownerId,
             CaseType = OrderedLevels,
             Title = request.Title.Trim(),
             Description = request.Description.Trim(),
+            ProgressionMode = request.ProgressionMode,
             Sections = BuildSections(Guid.Empty, sections)
         };
 
@@ -46,10 +47,10 @@ public sealed class CaseService(AppDbContext db)
         {
             section.Case = entity;
             section.CaseId = entity.Id;
-            foreach (var level in section.Levels)
+            foreach (var content in section.Items)
             {
-                level.Case = entity;
-                level.CaseId = entity.Id;
+                content.Case = entity;
+                content.CaseId = entity.Id;
             }
         }
 
@@ -60,28 +61,34 @@ public sealed class CaseService(AppDbContext db)
 
     public async Task<TeacherCaseDto?> UpdateAsync(string ownerId, Guid caseId, UpdateCaseRequest request, CancellationToken cancellationToken = default)
     {
-        var entity = await OwnedCaseQuery(ownerId).FirstOrDefaultAsync(item => item.Id == caseId, cancellationToken);
+        var entity = await db.TeacherCases.Include(item => item.ShareLinks)
+            .FirstOrDefaultAsync(item => item.Id == caseId && item.OwnerId == ownerId, cancellationToken);
         if (entity is null || entity.Archived) return null;
 
-        var sections = await ValidateAndLoadSectionsAsync(ownerId, request.CaseType, request.Title, request.Description, request.Sections, cancellationToken);
-        var oldLevels = entity.Sections.SelectMany(section => section.Levels).ToArray();
-        db.CaseLevels.RemoveRange(oldLevels);
-        db.CaseSections.RemoveRange(entity.Sections);
-        entity.Levels.Clear();
-        entity.Sections.Clear();
+        // Validate every reference before replacing any saved section or item.
+        var sections = await ValidateAndLoadSectionsAsync(ownerId, request.CaseType, request.Title, request.Description,
+            request.Sections, request.ProgressionMode, cancellationToken);
+        await using var transaction = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        await db.CaseContentItems.Where(item => item.CaseId == caseId).ExecuteDeleteAsync(cancellationToken);
+        await db.CaseSections.Where(section => section.CaseId == caseId).ExecuteDeleteAsync(cancellationToken);
 
         entity.Title = request.Title.Trim();
         entity.Description = request.Description.Trim();
         entity.CaseType = OrderedLevels;
+        entity.ProgressionMode = request.ProgressionMode;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         foreach (var section in BuildSections(caseId, sections))
         {
             section.Case = entity;
             entity.Sections.Add(section);
-            foreach (var level in section.Levels) level.Case = entity;
+            foreach (var content in section.Items) content.Case = entity;
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return ToTeacherDto(entity);
     }
 
@@ -89,8 +96,9 @@ public sealed class CaseService(AppDbContext db)
     {
         var entity = await OwnedCaseQuery(ownerId).FirstOrDefaultAsync(item => item.Id == caseId, cancellationToken);
         if (entity is null || entity.Archived) return null;
-        if (entity.Sections.Sum(section => section.Levels.Count) == 0)
-            throw new CaseValidationException(new Dictionary<string, string[]> { ["sections"] = ["A case must contain at least one level."] });
+        var itemCount = entity.Sections.Sum(section => section.Items.Count);
+        if (itemCount is < 1 or > 100)
+            throw new CaseValidationException(new Dictionary<string, string[]> { ["sections"] = ["A published case must contain between 1 and 100 content items."] });
         entity.IsPublished = true;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
@@ -120,29 +128,42 @@ public sealed class CaseService(AppDbContext db)
         return true;
     }
 
-    internal static StudentCaseDto ToStudentDto(TeacherCase entity)
+    internal static StudentCaseDto ToStudentDto(TeacherCase entity, string shareToken, MarkdownRenderer renderer)
     {
-        var levels = entity.Sections.OrderBy(section => section.Order)
-            .SelectMany(section => section.Levels.OrderBy(level => level.Order)
-                .Select(level => (section, level)))
-            .Select((entry, order) =>
+        var orderedItems = entity.Sections.OrderBy(section => section.Order)
+            .SelectMany(section => section.Items.OrderBy(item => item.Order).Select(item => (section, item)))
+            .ToArray();
+        var steps = orderedItems.Select((entry, index) =>
+        {
+            var title = entry.item.LevelVersion?.Title ?? entry.item.MarkdownPageVersion?.Title ?? "";
+            title = EffectiveTitle(entry.item.DisplayTitle, title);
+            if (entry.item.Kind == CaseContentItem.MarkdownKind)
             {
-                var definition = JsonSerializer.Deserialize<LevelDefinition>(entry.level.LevelVersion.DefinitionJson, JsonOptions)
-                    ?? throw new InvalidOperationException("Level definition snapshot is invalid.");
-                definition.Tests = definition.Tests.Where(test => !test.Hidden).ToList();
-                return new StudentCaseLevelDto(
-                    entry.level.LevelVersionId,
-                    order + 1,
-                    entry.section.Order,
-                    entry.section.Title,
-                    EffectiveTitle(entry.level.DisplayTitle, entry.level.LevelVersion.Title),
-                    definition);
-            }).ToArray();
-        return new StudentCaseDto(entity.Id, OrderedLevels, entity.Title, levels);
+                var version = entry.item.MarkdownPageVersion
+                    ?? throw new InvalidOperationException("A Markdown case item is missing its pinned version.");
+                var html = renderer.Render(version.Markdown,
+                    assetId => $"/api/student/cases/{shareToken}/markdown-assets/{assetId:D}/content");
+                return new StudentCaseStepDto(entry.item.Id, CaseContentItem.MarkdownKind, index + 1,
+                    entry.section.Order, entry.section.Title, title, null, null, html, false);
+            }
+
+            var levelVersion = entry.item.LevelVersion
+                ?? throw new InvalidOperationException("A case level is missing its pinned version.");
+            var definition = JsonSerializer.Deserialize<LevelDefinition>(levelVersion.DefinitionJson, JsonOptions)
+                ?? throw new InvalidOperationException("Level definition snapshot is invalid.");
+            definition.Tests = definition.Tests.Where(test => !test.Hidden).ToList();
+            return new StudentCaseStepDto(entry.item.Id, CaseContentItem.LevelKind, index + 1,
+                entry.section.Order, entry.section.Title, title, levelVersion.Id, definition, null, false);
+        }).ToArray();
+        var levels = steps.Where(step => step.Kind == CaseContentItem.LevelKind && step.LevelVersionId is not null)
+            .Select(step => new StudentCaseLevelDto(step.LevelVersionId!.Value, step.Order, step.SectionOrder, step.SectionTitle,
+                step.Title, step.Definition!)).ToArray();
+        return new StudentCaseDto(entity.Id, OrderedLevels, entity.Title, entity.ProgressionMode, steps, levels);
     }
 
     private IQueryable<TeacherCase> OwnedCaseQuery(string ownerId) => db.TeacherCases
-        .Include(item => item.Sections).ThenInclude(section => section.Levels).ThenInclude(level => level.LevelVersion)
+        .Include(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.LevelVersion)
+        .Include(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.MarkdownPageVersion).ThenInclude(version => version!.Page)
         .Include(item => item.ShareLinks)
         .Where(item => item.OwnerId == ownerId);
 
@@ -152,54 +173,77 @@ public sealed class CaseService(AppDbContext db)
         string title,
         string description,
         IReadOnlyList<CaseSectionInput> sections,
+        CaseProgressionMode progressionMode,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
         if (caseType != OrderedLevels) errors["caseType"] = ["Only orderedLevels cases are currently supported."];
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 200) errors["title"] = ["Title must contain between 1 and 200 characters."];
         if (description is null || description.Trim().Length > 2000) errors["description"] = ["Description cannot exceed 2000 characters."];
+        if (!Enum.IsDefined(progressionMode)) errors["progressionMode"] = ["Choose Sequential or AllOpen progression."];
         if (sections is null || sections.Count == 0 || sections.Any(section => section is null))
             errors["sections"] = ["A case must contain at least one section."];
 
         var safeSections = sections?.Where(section => section is not null).ToArray() ?? [];
         foreach (var section in safeSections)
         {
-            if (section.Levels is null)
+            if (section.Items is null)
             {
-                errors["sections"] = ["Each section must contain a level list."];
+                errors["sections"] = ["Each section must contain an item list."];
                 continue;
             }
             if (section.Title?.Trim().Length is > 120)
                 errors["sections"] = ["Section names cannot exceed 120 characters."];
-            if (section.Levels.Any(level => level is null))
-                errors["sections"] = ["A section contains an invalid level entry."];
-            foreach (var level in section.Levels.Where(level => level is not null))
-                if (level.DisplayTitle?.Trim().Length is > 200)
-                    errors["sections"] = ["Custom level names cannot exceed 200 characters."];
+            if (section.Items.Any(content => content is null))
+                errors["sections"] = ["A section contains an invalid content item."];
+            foreach (var content in section.Items.Where(content => content is not null))
+            {
+                var kind = NormalizeKind(content.Kind);
+                if (kind == CaseContentItem.LevelKind && (content.LevelVersionId is null || content.MarkdownPageVersionId is not null)
+                    || kind == CaseContentItem.MarkdownKind && (content.MarkdownPageVersionId is null || content.LevelVersionId is not null)
+                    || kind is not (CaseContentItem.LevelKind or CaseContentItem.MarkdownKind))
+                    errors["sections"] = ["Each content item must reference exactly one supported content version."];
+                if (content.DisplayTitle?.Trim().Length is > 200)
+                    errors["sections"] = ["Custom content names cannot exceed 200 characters."];
+            }
         }
 
-        var inputs = safeSections.SelectMany(section => section.Levels is null
-            ? Enumerable.Empty<CaseLevelInput>()
-            : section.Levels.Where(level => level is not null)).ToArray();
-        var versionIds = inputs.Select(input => input.LevelVersionId).ToArray();
-        if (versionIds.Length is < 1 or > 100)
-            errors["sections"] = ["A case must contain between 1 and 100 levels."];
-        else if (versionIds.Distinct().Count() != versionIds.Length)
+        var inputs = safeSections.SelectMany(section => section.Items is null
+            ? Enumerable.Empty<CaseContentItemInput>()
+            : section.Items.Where(content => content is not null)).ToArray();
+        if (inputs.Length > 100)
+            errors["sections"] = ["A case cannot contain more than 100 content items."];
+        var levelVersionIds = inputs.Where(item => NormalizeKind(item.Kind) == CaseContentItem.LevelKind && item.LevelVersionId is not null)
+            .Select(item => item.LevelVersionId!.Value).ToArray();
+        if (levelVersionIds.Distinct().Count() != levelVersionIds.Length)
             errors["sections"] = ["A level version can only appear once across all sections."];
         if (errors.Count != 0) throw new CaseValidationException(errors);
 
-        var versions = await db.LevelVersions.Include(version => version.Level)
-            .Where(version => versionIds.Contains(version.Id) && version.Level.OwnerId == ownerId)
+        var pageVersionIds = inputs.Where(item => NormalizeKind(item.Kind) == CaseContentItem.MarkdownKind)
+            .Select(item => item.MarkdownPageVersionId!.Value).Distinct().ToArray();
+        var levelVersions = await db.LevelVersions.Include(version => version.Level)
+            .Where(version => levelVersionIds.Contains(version.Id) && version.Level.OwnerId == ownerId)
             .ToListAsync(cancellationToken);
-        if (versions.Count != versionIds.Length)
-            throw new CaseValidationException(new Dictionary<string, string[]> { ["sections"] = ["One or more selected level versions are unavailable."] });
+        var pageVersions = await db.MarkdownPageVersions.Include(version => version.Page)
+            .Where(version => pageVersionIds.Contains(version.Id) && version.Page.OwnerId == ownerId && !version.Page.IsArchived)
+            .ToListAsync(cancellationToken);
+        if (levelVersions.Count != levelVersionIds.Length || pageVersions.Count != pageVersionIds.Length)
+            throw new CaseValidationException(new Dictionary<string, string[]>
+            {
+                ["sections"] = ["One or more selected level or Markdown page versions are unavailable to this set owner."]
+            });
 
-        var byId = versions.ToDictionary(version => version.Id);
+        var levelsById = levelVersions.ToDictionary(version => version.Id);
+        var pagesById = pageVersions.ToDictionary(version => version.Id);
         return safeSections.Select(section => new ValidatedCaseSection(
             NormalizeOptional(section.Title),
-            section.Levels!.Where(level => level is not null).Select(level => new ValidatedCaseLevel(
-                byId[level.LevelVersionId],
-                NormalizeOptional(level.DisplayTitle))).ToArray())).ToList();
+            section.Items!.Where(content => content is not null).Select(content =>
+            {
+                var kind = NormalizeKind(content.Kind);
+                return kind == CaseContentItem.LevelKind
+                    ? new ValidatedCaseContentItem(kind, levelsById[content.LevelVersionId!.Value], null, NormalizeOptional(content.DisplayTitle))
+                    : new ValidatedCaseContentItem(kind, null, pagesById[content.MarkdownPageVersionId!.Value], NormalizeOptional(content.DisplayTitle));
+            }).ToArray())).ToList();
     }
 
     private static List<CaseSection> BuildSections(Guid caseId, IReadOnlyList<ValidatedCaseSection> sections)
@@ -211,15 +255,17 @@ public sealed class CaseService(AppDbContext db)
                 Title = section.Title,
                 Order = sectionOrder
             };
-            entity.Levels = section.Levels.Select((item, levelOrder) => new CaseLevel
+            entity.Items = section.Items.Select((item, itemOrder) => new CaseContentItem
             {
                 CaseId = caseId,
                 SectionId = entity.Id,
                 Section = entity,
-                LevelId = item.Version.LevelId,
-                LevelVersionId = item.Version.Id,
-                LevelVersion = item.Version,
-                Order = levelOrder,
+                Kind = item.Kind,
+                LevelVersionId = item.LevelVersion?.Id,
+                LevelVersion = item.LevelVersion,
+                MarkdownPageVersionId = item.MarkdownPageVersion?.Id,
+                MarkdownPageVersion = item.MarkdownPageVersion,
+                Order = itemOrder,
                 DisplayTitle = item.DisplayTitle
             }).ToList();
             return entity;
@@ -234,18 +280,23 @@ public sealed class CaseService(AppDbContext db)
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
+    private static string NormalizeKind(string? kind) => kind?.Trim().ToLowerInvariant() ?? "";
+
     private static TeacherCaseDto ToTeacherDto(TeacherCase item)
     {
         var sections = item.Sections.OrderBy(section => section.Order).Select(section => new CaseSectionDto(
             section.Id,
             section.Title,
             section.Order,
-            section.Levels.OrderBy(level => level.Order).Select(level => new CaseLevelDto(
-                level.LevelId,
-                level.LevelVersionId,
-                level.Order,
-                level.LevelVersion.Title,
-                level.DisplayTitle)).ToArray())).ToArray();
+            section.Items.OrderBy(content => content.Order).Select(content => new CaseContentItemDto(
+                content.Id,
+                content.Kind,
+                content.LevelVersionId,
+                content.MarkdownPageVersionId,
+                content.Order,
+                content.LevelVersion?.Title ?? content.MarkdownPageVersion?.Title ?? "",
+                content.DisplayTitle,
+                content.MarkdownPageVersion?.Page.IsBuiltIn ?? false)).ToArray())).ToArray();
         return new TeacherCaseDto(
             item.Id,
             item.CaseType,
@@ -253,13 +304,14 @@ public sealed class CaseService(AppDbContext db)
             item.Description,
             item.IsPublished,
             item.Archived,
+            item.ProgressionMode,
             sections,
-            sections.Sum(section => section.Levels.Count),
+            sections.Sum(section => section.Items.Count),
             item.ShareLinks.Any(link => link.RevokedAt is null));
     }
 
-    private sealed record ValidatedCaseSection(string? Title, IReadOnlyList<ValidatedCaseLevel> Levels);
-    private sealed record ValidatedCaseLevel(LevelVersionEntity Version, string? DisplayTitle);
+    private sealed record ValidatedCaseSection(string? Title, IReadOnlyList<ValidatedCaseContentItem> Items);
+    private sealed record ValidatedCaseContentItem(string Kind, LevelVersionEntity? LevelVersion, MarkdownPageVersion? MarkdownPageVersion, string? DisplayTitle);
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

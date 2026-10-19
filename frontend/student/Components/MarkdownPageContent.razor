@@ -1,0 +1,67 @@
+@using Synapse.Blocks.Models
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<main class="markdown-learning-page">
+    @if (!string.IsNullOrWhiteSpace(Step.SectionTitle))
+    {
+        <div class="markdown-learning-section">@Step.SectionTitle</div>
+    }
+    <article class="markdown-step-card">
+        <header class="markdown-step-header">
+            <div>
+                <span class="markdown-step-eyebrow">МАТЕРИАЛ · ШАГ @Step.Order.ToString("00")</span>
+                <h1>@Step.Title</h1>
+            </div>
+            @if (Step.IsCompleted)
+            {
+                <span class="markdown-step-status is-complete">✓ Прочитано</span>
+            }
+        </header>
+        <div class="markdown-step-content" @ref="_content">
+            @((MarkupString)(Step.MarkdownHtml ?? ""))
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div class="markdown-step-error" role="alert">@Error</div>
+        }
+        @if (IsAttemptComplete)
+        {
+            <div class="markdown-step-finished" role="status">Вы завершили все материалы набора.</div>
+        }
+        <footer class="markdown-step-footer">
+            <span>@(Step.IsCompleted ? "Этот материал уже отмечен как прочитанный." : "Отметьте материал прочитанным, чтобы продолжить набор.")</span>
+            <button type="button" disabled="@(IsBusy || IsAttemptComplete)" @onclick="Continue">
+                @(IsBusy ? "Сохраняем…" : IsAttemptComplete ? "Набор завершён ✓" : Step.IsCompleted ? "К следующему шагу →" : "Продолжить →")
+            </button>
+        </footer>
+    </article>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public StudentCaseStepDto Step { get; set; } = default!;
+    [Parameter] public bool IsAttemptComplete { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string Error { get; set; } = "";
+    [Parameter] public EventCallback<Guid> OnContinue { get; set; }
+
+    private ElementReference _content;
+    private IJSObjectReference? _module;
+
+    private Task Continue() => OnContinue.InvokeAsync(Step.StepId);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_module is null)
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", new Uri(new Uri(Navigation.BaseUri), "js/markdown-content.js").ToString());
+        await _module.InvokeVoidAsync("enhanceMarkdown", _content);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try { await _module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

@@ -343,6 +343,13 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ProgressionMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Sequential");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -391,7 +398,73 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.ToTable("attempt_level_results", (string)null);
                 });
 
-            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseLevel", b =>
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.AttemptStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AttemptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Completed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("LevelVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Markdown")
+                        .HasMaxLength(102400)
+                        .HasColumnType("character varying(102400)");
+
+                    b.Property<Guid?>("MarkdownPageVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SectionOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SectionTitle")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("SourceItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LevelVersionId");
+
+                    b.HasIndex("MarkdownPageVersionId");
+
+                    b.HasIndex("AttemptId", "Order")
+                        .IsUnique();
+
+                    b.HasIndex("AttemptId", "SourceItemId")
+                        .IsUnique();
+
+                    b.ToTable("attempt_steps", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_attempt_steps_kind_reference", "(\"Kind\" = 'level' AND \"LevelVersionId\" IS NOT NULL AND \"MarkdownPageVersionId\" IS NULL AND \"Markdown\" IS NULL) OR (\"Kind\" = 'markdown' AND \"LevelVersionId\" IS NULL AND \"MarkdownPageVersionId\" IS NOT NULL AND \"Markdown\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseContentItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -404,10 +477,15 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("LevelId")
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("LevelVersionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("LevelVersionId")
+                    b.Property<Guid?>("MarkdownPageVersionId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Order")
@@ -422,10 +500,19 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
                     b.HasIndex("LevelVersionId");
 
+                    b.HasIndex("MarkdownPageVersionId");
+
+                    b.HasIndex("CaseId", "LevelVersionId")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 'level'");
+
                     b.HasIndex("SectionId", "Order")
                         .IsUnique();
 
-                    b.ToTable("case_levels", (string)null);
+                    b.ToTable("case_content_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_case_content_items_kind_reference", "(\"Kind\" = 'level' AND \"LevelVersionId\" IS NOT NULL AND \"MarkdownPageVersionId\" IS NULL) OR (\"Kind\" = 'markdown' AND \"LevelVersionId\" IS NULL AND \"MarkdownPageVersionId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseSection", b =>
@@ -480,6 +567,121 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("level_versions", (string)null);
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("markdown_assets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_markdown_assets_length", "\"Length\" > 0 AND \"Length\" <= 10485760");
+                        });
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownPage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BuiltInKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CurrentVersionId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsBuiltIn")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuiltInKey")
+                        .IsUnique();
+
+                    b.HasIndex("CurrentVersionId");
+
+                    b.HasIndex("OwnerId", "IsArchived", "Title");
+
+                    b.ToTable("markdown_pages", (string)null);
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownPageVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasMaxLength(102400)
+                        .HasColumnType("character varying(102400)");
+
+                    b.Property<Guid>("PageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PageId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("markdown_page_versions", (string)null);
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Participant", b =>
@@ -579,6 +781,13 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("ProgressionMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Sequential");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -729,10 +938,35 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Navigation("LevelVersion");
                 });
 
-            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseLevel", b =>
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.AttemptStep", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.Attempt", "Attempt")
+                        .WithMany("Steps")
+                        .HasForeignKey("AttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.LevelVersionEntity", "LevelVersion")
+                        .WithMany()
+                        .HasForeignKey("LevelVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.MarkdownPageVersion", "MarkdownPageVersion")
+                        .WithMany()
+                        .HasForeignKey("MarkdownPageVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Attempt");
+
+                    b.Navigation("LevelVersion");
+
+                    b.Navigation("MarkdownPageVersion");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseContentItem", b =>
                 {
                     b.HasOne("Synapse.Blocks.Api.Data.Entities.TeacherCase", "Case")
-                        .WithMany("Levels")
+                        .WithMany()
                         .HasForeignKey("CaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -740,11 +974,15 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.HasOne("Synapse.Blocks.Api.Data.Entities.LevelVersionEntity", "LevelVersion")
                         .WithMany()
                         .HasForeignKey("LevelVersionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.MarkdownPageVersion", "MarkdownPageVersion")
+                        .WithMany()
+                        .HasForeignKey("MarkdownPageVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Synapse.Blocks.Api.Data.Entities.CaseSection", "Section")
-                        .WithMany("Levels")
+                        .WithMany("Items")
                         .HasForeignKey("SectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -752,6 +990,8 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Navigation("Case");
 
                     b.Navigation("LevelVersion");
+
+                    b.Navigation("MarkdownPageVersion");
 
                     b.Navigation("Section");
                 });
@@ -776,6 +1016,46 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Level");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownAsset", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Auth.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownPage", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.MarkdownPageVersion", "CurrentVersion")
+                        .WithMany()
+                        .HasForeignKey("CurrentVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Synapse.Blocks.Api.Auth.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CurrentVersion");
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownPageVersion", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Data.Entities.MarkdownPage", "Page")
+                        .WithMany("Versions")
+                        .HasForeignKey("PageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Page");
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Participant", b =>
@@ -832,11 +1112,18 @@ namespace Synapse.Blocks.Api.Data.Migrations
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Attempt", b =>
                 {
                     b.Navigation("LevelResults");
+
+                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseSection", b =>
                 {
-                    b.Navigation("Levels");
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.MarkdownPage", b =>
+                {
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Participant", b =>
@@ -846,8 +1133,6 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.TeacherCase", b =>
                 {
-                    b.Navigation("Levels");
-
                     b.Navigation("Sections");
 
                     b.Navigation("ShareLinks");

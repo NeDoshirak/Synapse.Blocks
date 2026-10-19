@@ -13,6 +13,7 @@ namespace Synapse.Blocks.Serialization;
 [JsonSerializable(typeof(HashSet<Guid>))]
 [JsonSerializable(typeof(BlockProgram))]
 [JsonSerializable(typeof(StudentCaseDto))]
+[JsonSerializable(typeof(StudentCaseStepDto))]
 [JsonSerializable(typeof(StudentAttemptDto))]
 [JsonSerializable(typeof(LevelEvaluationDto))]
 [JsonSerializable(typeof(CreateStudentParticipantRequest))]

@@ -5,11 +5,15 @@ using Synapse.Blocks.Api.Auth;
 using Synapse.Blocks.Api.Contracts.Cases;
 using Synapse.Blocks.Api.Data;
 using Synapse.Blocks.Api.Data.Entities;
+using Synapse.Blocks.Api.Contracts.MarkdownPages;
+using Synapse.Blocks.Api.MarkdownPages;
 
 namespace Synapse.Blocks.Api.Cases;
 
-public sealed class ShareLinkService(AppDbContext db, IConfiguration configuration, PlatformAuditEventService audit)
+public sealed class ShareLinkService(AppDbContext db, IConfiguration configuration, PlatformAuditEventService audit, MarkdownRenderer markdownRenderer)
 {
+    private static readonly System.Text.RegularExpressions.Regex AssetReference = new(
+        @"asset:(?<id>[0-9a-fA-F-]{36})", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     public async Task<ShareLinkCreatedDto?> CreateOrRotateAsync(
         string ownerId,
         Guid caseId,
@@ -54,7 +58,36 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
     public async Task<StudentCaseDto?> ResolveAsync(string token, CancellationToken cancellationToken = default)
     {
         var item = await ResolveCaseAsync(token, cancellationToken);
-        return item is null ? null : CaseService.ToStudentDto(item);
+        return item is null ? null : CaseService.ToStudentDto(item, token, markdownRenderer);
+    }
+
+    public async Task<MarkdownAssetContent?> GetCaseMarkdownAssetAsync(string token, Guid assetId, CancellationToken cancellationToken = default)
+    {
+        var sharedCase = await ResolveCaseAsync(token, cancellationToken);
+        if (sharedCase is null) return null;
+        var markdownSources = await db.CaseContentItems.AsNoTracking()
+            .Where(item => item.CaseId == sharedCase.Id && item.Kind == CaseContentItem.MarkdownKind)
+            .Select(item => item.MarkdownPageVersion!.Markdown)
+            .ToArrayAsync(cancellationToken);
+        if (!markdownSources.Any(source => ContainsAsset(source, assetId))) return null;
+        return await GetOwnedAssetAsync(sharedCase.OwnerId, assetId, cancellationToken);
+    }
+
+    public async Task<MarkdownAssetContent?> GetAttemptMarkdownAssetAsync(
+        string token,
+        Guid attemptId,
+        Guid assetId,
+        CancellationToken cancellationToken = default)
+    {
+        var sharedCase = await ResolveCaseAsync(token, cancellationToken);
+        if (sharedCase is null) return null;
+        var markdownSources = await db.Attempts.AsNoTracking()
+            .Where(attempt => attempt.Id == attemptId && attempt.CaseId == sharedCase.Id)
+            .SelectMany(attempt => attempt.Steps.Where(step => step.Kind == CaseContentItem.MarkdownKind && step.Markdown != null)
+                .Select(step => step.Markdown!))
+            .ToArrayAsync(cancellationToken);
+        if (!markdownSources.Any(source => ContainsAsset(source, assetId))) return null;
+        return await GetOwnedAssetAsync(sharedCase.OwnerId, assetId, cancellationToken);
     }
 
     public async Task<TeacherCase?> ResolveCaseAsync(string token, CancellationToken cancellationToken = default)
@@ -62,13 +95,23 @@ public sealed class ShareLinkService(AppDbContext db, IConfiguration configurati
         if (string.IsNullOrWhiteSpace(token) || token.Length != 43) return null;
         var hash = Hash(token);
         var link = await db.ShareLinks.AsNoTracking()
-            .Include(item => item.Case).ThenInclude(item => item.Sections).ThenInclude(section => section.Levels).ThenInclude(level => level.LevelVersion)
+            .Include(item => item.Case).ThenInclude(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.LevelVersion)
+            .Include(item => item.Case).ThenInclude(item => item.Sections).ThenInclude(section => section.Items).ThenInclude(content => content.MarkdownPageVersion)
             .FirstOrDefaultAsync(item => item.TokenHash == hash && item.RevokedAt == null, cancellationToken);
         if (link is null || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(link.TokenHash), Convert.FromHexString(hash))
             || !link.Case.IsPublished || link.Case.Archived)
             return null;
         return link.Case;
     }
+
+    private Task<MarkdownAssetContent?> GetOwnedAssetAsync(string ownerId, Guid assetId, CancellationToken cancellationToken) =>
+        db.MarkdownAssets.AsNoTracking()
+            .Where(asset => asset.Id == assetId && asset.OwnerId == ownerId)
+            .Select(asset => new MarkdownAssetContent(asset.ContentType, asset.Content, asset.CreatedAt))
+            .SingleOrDefaultAsync(cancellationToken);
+
+    private static bool ContainsAsset(string markdown, Guid assetId) => AssetReference.Matches(markdown)
+        .Any(match => Guid.TryParse(match.Groups["id"].Value, out var referencedId) && referencedId == assetId);
 
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }

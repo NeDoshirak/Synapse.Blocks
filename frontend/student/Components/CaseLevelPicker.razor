@@ -3,95 +3,140 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<div class="case-level-picker" @ref="_root">
+<div class="case-level-picker @(_open ? "is-open" : "")" @ref="_root">
     <button type="button"
             class="case-level-picker__trigger"
-            aria-haspopup="listbox"
+            aria-haspopup="dialog"
             aria-expanded="@_open.ToString().ToLowerInvariant()"
-            aria-controls="@_listId"
+            aria-controls="@_dialogId"
             aria-label="@TriggerLabel"
             title="@TriggerLabel"
             @ref="_trigger"
             @onclick="Toggle">
-        @if (SelectedItem is { } selected)
-        {
-            <span class="case-level-picker__status" aria-hidden="true">@(selected.IsCompleted ? "✓" : "○")</span>
-            <span class="case-level-picker__current">@selected.Order.ToString("00") · @selected.DisplayTitle</span>
-        }
-        else
-        {
-            <span class="case-level-picker__current">Выбрать задание</span>
-        }
-        <span class="case-level-picker__chevron" aria-hidden="true">⌄</span>
+        <span class="case-level-picker__trigger-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </span>
+        <span class="case-level-picker__trigger-copy">
+            <span class="case-level-picker__trigger-caption">@(IsCaseMode ? "ТЕКУЩЕЕ ЗАДАНИЕ" : "ТЕКУЩИЙ УРОВЕНЬ")</span>
+            <strong class="case-level-picker__current">
+                @if (SelectedItem is { } selected)
+                {
+                    @selected.Order.ToString("00")<text> · </text>@selected.DisplayTitle
+                }
+                else
+                {
+                    @(IsCaseMode ? "Выбрать задание" : "Выбрать уровень")
+                }
+            </strong>
+        </span>
+        <span class="case-level-picker__trigger-action">
+            <span>СПИСОК</span>
+            <svg viewBox="0 0 24 24" focusable="false"><path d="m8 10 4 4 4-4" /></svg>
+        </span>
     </button>
 
     @if (_open)
     {
-        <div class="case-level-picker__menu"
-             id="@_listId"
-             role="listbox"
-             aria-label="Задания набора"
-             aria-activedescendant="@ActiveOptionId"
-             tabindex="0"
-             @onkeydown="HandleKeyDown"
-             @ref="_menu">
-            @foreach (var group in Groups)
-            {
-                <div class="case-level-picker__group" role="group" aria-label="@(string.IsNullOrWhiteSpace(group.Title) ? "Задания без раздела" : group.Title)">
-                    @if (!string.IsNullOrWhiteSpace(group.Title))
+        <div class="case-level-picker__overlay" @onclick="CloseFromBackdrop">
+            <section class="case-level-picker__menu"
+                     id="@_dialogId"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="@_dialogHeadingId"
+                     @onclick:stopPropagation="true"
+                     @onkeydown="HandleKeyDown">
+                <header class="case-level-picker__menu-header">
+                    <div class="case-level-picker__menu-brand">
+                        <span class="case-level-picker__menu-mark" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+                        </span>
+                        <span class="case-level-picker__menu-heading">
+                            <span>@(IsCaseMode ? "УЧЕБНЫЙ НАБОР" : "ФВС / КОД")</span>
+                            <strong id="@_dialogHeadingId">@(IsCaseMode ? "Задания" : "Уровни")</strong>
+                        </span>
+                    </div>
+                    <button type="button" class="case-level-picker__close" aria-label="Закрыть меню" @onclick="() => CloseAsync(true)">×</button>
+                </header>
+                <div class="case-level-picker__menu-progress">
+                    <div><span>Прогресс</span><b>@CompletedCount <small>/ @Items.Count</small></b></div>
+                    <span class="case-level-picker__progress-track"><i style="width:@ProgressPercent%"></i></span>
+                </div>
+                <div class="case-level-picker__list"
+                     id="@_listId"
+                     role="listbox"
+                     aria-label="@(IsCaseMode ? "Задания набора" : "Уровни")"
+                     aria-activedescendant="@ActiveOptionId"
+                     tabindex="0"
+                     @ref="_menu">
+                    @foreach (var group in Groups)
                     {
-                        <div class="case-level-picker__group-title">@group.Title</div>
-                    }
-                    @foreach (var item in group.Items)
-                    {
-                        var index = IndexOf(item.LevelId);
-                        <div id="@OptionId(index)"
-                             title="@MenuItemLabel(item)"
-                             class="case-level-picker__option @(item.LevelId == SelectedLevelId ? "is-selected" : "") @(item.IsCompleted ? "is-completed" : "") @(item.IsDisabled ? "is-disabled" : "") @(index == _activeIndex ? "is-active" : "")"
-                             role="option"
-                             aria-selected="@(item.LevelId == SelectedLevelId)"
-                             aria-disabled="@item.IsDisabled"
-                             @onpointerenter="() => _activeIndex = index"
-                             @onclick="() => SelectAsync(item)">
-                            <span class="case-level-picker__status" aria-hidden="true">@(item.IsCompleted ? "✓" : "○")</span>
-                            <span class="case-level-picker__option-title">@item.Order.ToString("00") · @item.DisplayTitle</span>
-                            @if (item.LevelId == SelectedLevelId)
+                        <div class="case-level-picker__group" role="group" aria-label="@(string.IsNullOrWhiteSpace(group.Title) ? "Задания без раздела" : group.Title)">
+                            @if (!string.IsNullOrWhiteSpace(group.Title))
                             {
-                                <span class="case-level-picker__selected-label">ТЕКУЩЕЕ</span>
+                                <div class="case-level-picker__group-title">@group.Title</div>
                             }
-                            else if (item.IsDisabled)
+                            @foreach (var item in group.Items)
                             {
-                                <span class="case-level-picker__locked-label">ЗАКРЫТО</span>
+                                var index = IndexOf(item.ItemId);
+                                <div id="@OptionId(index)"
+                                     title="@MenuItemLabel(item)"
+                                     class="case-level-picker__option @(item.ItemId == SelectedLevelId ? "is-selected" : "") @(item.IsCompleted ? "is-completed" : "") @(item.IsDisabled ? "is-disabled" : "") @(item.Kind == "markdown" ? "is-reading" : "") @(index == _activeIndex ? "is-active" : "")"
+                                     role="option"
+                                     aria-selected="@(item.ItemId == SelectedLevelId)"
+                                     aria-disabled="@item.IsDisabled"
+                                     @onpointerenter="() => _activeIndex = index"
+                                     @onclick="() => SelectAsync(item)">
+                                    <span class="case-level-picker__status" aria-hidden="true">@(item.IsCompleted ? "✓" : "○")</span>
+                                    <span class="case-level-picker__option-title">
+                                        <span class="case-level-picker__option-number">@item.Order.ToString("00")</span>
+                                        <span class="case-level-picker__option-name">@item.DisplayTitle</span>
+                                    </span>
+                                    @if (item.Kind == "markdown")
+                                    {
+                                        <span class="case-level-picker__badge is-reading">@(item.IsDisabled ? "ЧТЕНИЕ · ЗАКРЫТО" : item.IsCompleted ? "ЧТЕНИЕ · ПРОЧИТАНО" : "ЧТЕНИЕ")</span>
+                                    }
+                                    else if (item.ItemId == SelectedLevelId)
+                                    {
+                                        <span class="case-level-picker__badge is-current">ТЕКУЩЕЕ</span>
+                                    }
+                                    else if (item.IsDisabled)
+                                    {
+                                        <span class="case-level-picker__badge is-locked">ЗАКРЫТО</span>
+                                    }
+                                </div>
                             }
                         </div>
                     }
                 </div>
-            }
+            </section>
         </div>
     }
 </div>
 
 @code {
-    [Parameter, EditorRequired] public IReadOnlyList<CaseLevelMenuItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<CaseMenuItem> Items { get; set; } = [];
     [Parameter] public Guid SelectedLevelId { get; set; }
+    [Parameter] public bool IsCaseMode { get; set; }
     [Parameter] public EventCallback<Guid> OnSelect { get; set; }
 
     private ElementReference _root;
     private ElementReference _trigger;
     private ElementReference _menu;
     private bool _open;
-    private bool _watchingOutside;
     private bool _focusMenuAfterRender;
     private int _lastScrolledIndex = -1;
     private int _activeIndex = -1;
     private IJSObjectReference? _module;
-    private DotNetObjectReference<CaseLevelPicker>? _self;
+    private readonly string _dialogId = $"case-level-picker-dialog-{Guid.NewGuid():N}";
+    private readonly string _dialogHeadingId = $"case-level-picker-heading-{Guid.NewGuid():N}";
     private readonly string _listId = $"case-level-picker-{Guid.NewGuid():N}";
 
-    private CaseLevelMenuItem? SelectedItem => Items.FirstOrDefault(item => item.LevelId == SelectedLevelId);
+    private CaseMenuItem? SelectedItem => Items.FirstOrDefault(item => item.ItemId == SelectedLevelId);
+    private int CompletedCount => Items.Count(item => item.IsCompleted);
+    private int ProgressPercent => Items.Count == 0 ? 0 : (int)Math.Round(CompletedCount * 100d / Items.Count);
     private string TriggerLabel => SelectedItem is { } selected
-        ? $"Текущее задание {selected.Order}: {selected.DisplayTitle}. {(selected.IsCompleted ? "Пройдено" : "Не пройдено")}"
-        : "Выбрать задание";
+        ? $"Открыть список. Текущее {(IsCaseMode ? "задание" : "уровень")} {selected.Order}: {selected.DisplayTitle}. {(selected.IsCompleted ? "Пройдено" : "Не пройдено")}"
+        : IsCaseMode ? "Открыть список заданий" : "Открыть список уровней";
     private string? ActiveOptionId => _activeIndex >= 0 && _activeIndex < Items.Count ? OptionId(_activeIndex) : null;
     private IReadOnlyList<MenuGroup> Groups
     {
@@ -150,15 +195,15 @@
                 await CloseAsync(true);
                 break;
             case "Tab":
-                await CloseAsync(false);
+                await CloseAsync(true);
                 break;
         }
     }
 
-    private async Task SelectAsync(CaseLevelMenuItem item)
+    private async Task SelectAsync(CaseMenuItem item)
     {
         if (item.IsDisabled) return;
-        await OnSelect.InvokeAsync(item.LevelId);
+        await OnSelect.InvokeAsync(item.ItemId);
         await CloseAsync(true);
     }
 
@@ -177,12 +222,12 @@
     private int IndexOf(Guid levelId)
     {
         for (var index = 0; index < Items.Count; index++)
-            if (Items[index].LevelId == levelId) return index;
+            if (Items[index].ItemId == levelId) return index;
         return -1;
     }
 
     private string OptionId(int index) => $"{_listId}-option-{index}";
-    private static string MenuItemLabel(CaseLevelMenuItem item) => $"{item.Order:00} · {item.DisplayTitle}";
+    private static string MenuItemLabel(CaseMenuItem item) => $"{item.Order:00} · {item.DisplayTitle}";
 
     private async Task CloseAsync(bool returnFocus)
     {
@@ -192,26 +237,14 @@
         if (returnFocus) await _trigger.FocusAsync();
     }
 
-    [JSInvokable]
-    public Task CloseFromOutsideAsync() => CloseAsync(false);
+    private Task CloseFromBackdrop() => CloseAsync(true);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_open && _module is null)
         {
-            var moduleUrl = new Uri(new Uri(Navigation.BaseUri), "js/case-level-picker.js").ToString();
+            var moduleUrl = new Uri(new Uri(Navigation.BaseUri), "js/case-level-picker.js?v=20261020-menu").ToString();
             _module = await JS.InvokeAsync<IJSObjectReference>("import", moduleUrl);
-        }
-        if (_open && !_watchingOutside && _module is not null)
-        {
-            _self ??= DotNetObjectReference.Create(this);
-            await _module.InvokeVoidAsync("watchOutside", _root, _self);
-            _watchingOutside = true;
-        }
-        if (!_open && _watchingOutside && _module is not null)
-        {
-            await _module.InvokeVoidAsync("stopWatching", _root);
-            _watchingOutside = false;
         }
         if (_open && _focusMenuAfterRender)
         {
@@ -231,13 +264,11 @@
         {
             try
             {
-                await _module.InvokeVoidAsync("stopWatching", _root);
                 await _module.DisposeAsync();
             }
             catch (JSDisconnectedException) { }
         }
-        _self?.Dispose();
     }
 
-    private sealed record MenuGroup(int? SectionOrder, string? Title, List<CaseLevelMenuItem> Items);
+    private sealed record MenuGroup(int? SectionOrder, string? Title, List<CaseMenuItem> Items);
 }

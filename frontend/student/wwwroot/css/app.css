@@ -1066,3 +1066,111 @@ html:not(.sandbox-route) .boot-line i { background: var(--brand); }
 .case-entry-shell { background-color: #0c0c0e; color: #f2f2f4; }
 .case-entry-card { background: rgba(22,22,24,.96); }
 .case-entry-card input { background: #111113; color: #f2f2f4; }
+
+/* Place the level picker and field reset in the shared top bar. */
+.app-header.game-app-header {
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+    padding-inline: 22px;
+}
+.game-header-clear-slot { display: flex; flex: 0 0 auto; align-items: center; }
+.game-header-clear {
+    min-height: 42px;
+    padding: 0 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #38383c;
+    border-radius: 11px;
+    background: #171719;
+    color: #c9c6ce;
+    font: 650 11px/1 system-ui, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color .16s, background .16s, color .16s, opacity .16s;
+}
+.game-header-clear:hover:not(:disabled) { border-color: #6b5143; background: #211d1c; color: #fff; }
+.game-header-clear:active:not(:disabled) { border-color: #f36f29; color: #ff9a63; }
+.game-header-clear:disabled { opacity: .48; cursor: default; }
+.game-header-clear-icon { display: none; font-size: 20px; font-weight: 400; line-height: .8; }
+.game-app-header > .brand { flex: 0 0 auto; white-space: nowrap; }
+.game-header-level-slot { flex: 0 1 440px; width: min(440px, 36vw); min-width: 0; }
+.game-header-level-slot .case-level-picker { width: 100%; min-width: 0; }
+.game-app-header > .main-nav { flex: 0 1 auto; margin-left: auto; justify-self: auto; }
+.game-app-header > .runtime-badge { flex: 0 0 auto; margin-left: 0; justify-self: auto; }
+.admin-header.game-app-header > .admin-nav { margin-left: auto; }
+.case-game-app-header > .game-header-clear-slot { margin-left: auto; }
+.operation-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.operation-heading .operation-number { margin-bottom: 8px; }
+.mission-intro-button {
+    flex: 0 0 auto;
+    margin-top: 7px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #19191c;
+    color: #b9b5bd;
+    font-size: 10px;
+    cursor: pointer;
+}
+.mission-intro-button:hover { border-color: #6b5143; color: #ff9a63; }
+.child-game-layout { height: calc(100dvh - 78px); }
+.sandbox-layout { height: calc(100dvh - 142px); }
+
+@media (max-width: 1100px) {
+    .app-header.game-app-header { gap: 9px; padding-inline: 14px; }
+    .game-header-level-slot { flex-basis: 360px; }
+    .game-app-header > .main-nav a { min-width: 76px; padding-inline: 9px; }
+}
+
+@media (max-width: 960px) {
+    .app-header.game-app-header {
+        height: auto;
+        min-height: 78px;
+        padding-block: 9px;
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr) max-content;
+        grid-template-areas: "brand picker clear" "nav nav nav";
+        gap: 8px 10px;
+    }
+    .game-header-clear-slot { grid-area: clear; justify-self: end; }
+    .case-game-app-header > .game-header-clear-slot { margin-left: 0; }
+    .game-app-header > .brand { grid-area: brand; justify-self: start; }
+    .game-header-level-slot { grid-area: picker; width: 100%; max-width: 440px; }
+    .game-app-header > .main-nav { grid-area: nav; width: 100%; margin-left: 0; justify-self: stretch; }
+    .game-app-header > .runtime-badge { display: none; }
+    .case-game-app-header { grid-template-areas: "brand picker clear" !important; }
+    .game-app-header > .main-nav { min-width: 0; }
+    .game-app-header > .main-nav a { min-width: 0; flex: 1 1 auto; }
+    .child-game-layout { height: auto; grid-template-columns: 270px minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+    .app-header.game-app-header {
+        padding: 9px 12px;
+        grid-template-columns: max-content minmax(0, 1fr) max-content;
+        gap: 8px;
+    }
+    .game-header-clear { min-height: 40px; padding-inline: 10px; }
+    .game-header-level-slot { max-width: none; }
+    .game-header-level-slot .case-level-picker__trigger { min-height: 48px; grid-template-columns: 34px minmax(0,1fr) auto; column-gap: 7px; padding: 4px 6px; }
+    .game-header-level-slot .case-level-picker__trigger-icon { width: 34px; height: 34px; }
+    .game-header-level-slot .case-level-picker__current { font-size: 11px; }
+    .game-header-level-slot .case-level-picker__trigger-action { padding: 7px 6px; font-size: 7px; }
+    .child-game-layout { display: block; height: auto; }
+}
+
+@media (max-width: 480px) {
+    .app-header.game-app-header { padding-inline: 9px; gap: 6px; }
+    .game-header-clear { width: 40px; min-width: 40px; padding: 0; }
+    .game-header-clear-icon { display: inline; }
+    .game-header-clear-label { display: none; }
+    .game-app-header > .brand { gap: 8px; }
+    .game-app-header > .brand b { font-size: 13px; letter-spacing: .08em; }
+    .game-app-header > .brand .brand-mark { width: 19px; height: 19px; }
+    .game-header-level-slot .case-level-picker__trigger-caption { display: none; }
+    .game-header-level-slot .case-level-picker__trigger-action span { display: none; }
+    .game-header-level-slot .case-level-picker__trigger-action { padding: 5px; }
+}
