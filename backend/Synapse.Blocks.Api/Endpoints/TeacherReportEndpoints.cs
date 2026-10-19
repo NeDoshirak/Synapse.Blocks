@@ -12,7 +12,7 @@ public static class TeacherReportEndpoints
         {
             var report = await reports.GetAsync(current.UserId, caseId, ct);
             return report is null ? Results.NotFound() : Results.Ok(report);
-        }).RequireAuthorization();
+        }).RequireAuthorization("ActiveMfa");
         return app;
     }
 }

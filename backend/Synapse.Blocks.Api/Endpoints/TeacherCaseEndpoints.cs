@@ -9,7 +9,7 @@ public static class TeacherCaseEndpoints
 {
     public static IEndpointRouteBuilder MapTeacherCaseEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/teacher/cases").RequireAuthorization().AddEndpointFilter<AntiforgeryEndpointFilter>();
+        var group = app.MapGroup("/api/teacher/cases").RequireAuthorization("ActiveMfa").AddEndpointFilter<AntiforgeryEndpointFilter>();
         group.MapGet("/", async (ICurrentUser current, CaseService cases, CancellationToken ct) => Results.Ok(await cases.ListAsync(current.UserId, ct)));
         group.MapPost("/", async (CreateCaseRequest request, ICurrentUser current, CaseService cases, CancellationToken ct) =>
         {

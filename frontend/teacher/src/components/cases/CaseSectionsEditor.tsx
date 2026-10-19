@@ -87,7 +87,9 @@ export function CaseSectionsEditor({ levels, sections, canonicalTitleByVersion =
                           value: item.clientId,
                           label: item.title.trim() || `Раздел ${sections.indexOf(item) + 1}`,
                         }))}
-                        onChange={targetId => onChange(moveSectionLevelTo(sections, section.clientId, targetId, assignment.levelVersionId))}
+                        onChange={targetId => {
+                          if (targetId) onChange(moveSectionLevelTo(sections, section.clientId, targetId, assignment.levelVersionId));
+                        }}
                       />}
                       <Button type="link" danger disabled={disabled} onClick={() => onChange(removeSectionLevel(sections, section.clientId, assignment.levelVersionId))}>Убрать</Button>
                     </Space>

@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<LevelVersionEntity> LevelVersions => Set<LevelVersionEntity>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<PlatformAuditEvent> PlatformAuditEvents => Set<PlatformAuditEvent>();
     public DbSet<TeacherLevel> TeacherLevels => Set<TeacherLevel>();
     public DbSet<TeacherCase> TeacherCases => Set<TeacherCase>();
     public DbSet<CaseSection> CaseSections => Set<CaseSection>();
@@ -44,6 +45,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         invitation.Property(item => item.Email).HasMaxLength(256).IsRequired();
         invitation.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
         invitation.Property(item => item.InvitedByUserId).IsRequired();
+
+        var applicationUser = modelBuilder.Entity<ApplicationUser>();
+        applicationUser.Property(user => user.FirstName).HasMaxLength(100);
+        applicationUser.Property(user => user.LastName).HasMaxLength(100);
+        applicationUser.Property(user => user.TeacherDescription).HasMaxLength(1000);
+        applicationUser.Property(user => user.IsActive).HasDefaultValue(true).IsRequired();
+
+        invitation.Property(item => item.RevokedAt);
+
+        var platformAudit = modelBuilder.Entity<PlatformAuditEvent>();
+        platformAudit.ToTable("platform_audit_events");
+        platformAudit.HasKey(item => item.Id);
+        platformAudit.HasIndex(item => item.CreatedAt);
+        platformAudit.HasIndex(item => new { item.TargetType, item.TargetId, item.CreatedAt });
+        platformAudit.Property(item => item.Action).HasMaxLength(64).IsRequired();
+        platformAudit.Property(item => item.TargetType).HasMaxLength(64).IsRequired();
+        platformAudit.Property(item => item.TargetId).HasMaxLength(256).IsRequired();
+        platformAudit.HasOne(item => item.Actor).WithMany().HasForeignKey(item => item.ActorUserId).OnDelete(DeleteBehavior.Restrict);
 
         var teacherCase = modelBuilder.Entity<TeacherCase>();
         teacherCase.ToTable("teacher_cases");

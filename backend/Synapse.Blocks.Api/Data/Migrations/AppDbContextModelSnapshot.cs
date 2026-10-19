@@ -177,6 +177,19 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -205,6 +218,10 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
                     b.Property<DateTimeOffset?>("StarterLevelsSeededAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TeacherDescription")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -246,6 +263,9 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -257,6 +277,45 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("invitations", (string)null);
+                });
+
+            modelBuilder.Entity("Synapse.Blocks.Api.Auth.PlatformAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("TargetType", "TargetId", "CreatedAt");
+
+                    b.ToTable("platform_audit_events", (string)null);
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Attempt", b =>
@@ -273,6 +332,7 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
                     b.Property<string>("LevelPresentationJson")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasDefaultValueSql("'[]'::jsonb");
 
@@ -350,11 +410,11 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Property<Guid>("LevelVersionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("SectionId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("Order")
                         .HasColumnType("integer");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -620,6 +680,17 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Synapse.Blocks.Api.Auth.PlatformAuditEvent", b =>
+                {
+                    b.HasOne("Synapse.Blocks.Api.Auth.ApplicationUser", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
+                });
+
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Attempt", b =>
                 {
                     b.HasOne("Synapse.Blocks.Api.Data.Entities.TeacherCase", "Case")
@@ -694,8 +765,6 @@ namespace Synapse.Blocks.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Case");
-
-                    b.Navigation("Levels");
                 });
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.LevelVersionEntity", b =>
@@ -765,6 +834,11 @@ namespace Synapse.Blocks.Api.Data.Migrations
                     b.Navigation("LevelResults");
                 });
 
+            modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.CaseSection", b =>
+                {
+                    b.Navigation("Levels");
+                });
+
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.Participant", b =>
                 {
                     b.Navigation("Attempts");
@@ -772,9 +846,9 @@ namespace Synapse.Blocks.Api.Data.Migrations
 
             modelBuilder.Entity("Synapse.Blocks.Api.Data.Entities.TeacherCase", b =>
                 {
-                    b.Navigation("Sections");
-
                     b.Navigation("Levels");
+
+                    b.Navigation("Sections");
 
                     b.Navigation("ShareLinks");
                 });

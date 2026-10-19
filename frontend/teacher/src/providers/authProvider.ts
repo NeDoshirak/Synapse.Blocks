@@ -1,12 +1,15 @@
 import { apiClient } from "./apiClient";
-import type { CurrentUser } from "../types/api";
+import type { AuthStep, CurrentUser } from "../types/api";
 
 export const authProvider = {
   login: async ({ email, password }: { email: string; password: string }) => {
     try {
-      await apiClient.request("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ email, password }) });
+      const result = await apiClient.request("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ email, password }) }) as AuthStep;
       apiClient.invalidateCsrf();
-      return { success: true, redirectTo: "/" };
+      if (result.nextStep === "twoFactor") return { success: true, redirectTo: "/two-factor-challenge" };
+      if (result.nextStep === "authenticatorSetup") return { success: true, redirectTo: "/authenticator-setup" };
+      if (result.nextStep === "authenticated") return { success: true, redirectTo: "/" };
+      return { success: false, error: new Error("Не удалось завершить вход") };
     } catch { return { success: false, error: new Error("Проверьте почту и пароль") }; }
   },
   logout: async () => {
@@ -14,7 +17,12 @@ export const authProvider = {
     return { success: true, redirectTo: "/login" };
   },
   check: async () => {
-    try { await apiClient.request("/api/auth/me"); return { authenticated: true }; }
+    try {
+      const user = await apiClient.request("/api/auth/me") as CurrentUser;
+      return user.twoFactorEnabled
+        ? { authenticated: true }
+        : { authenticated: false, redirectTo: "/authenticator-setup" };
+    }
     catch { return { authenticated: false, redirectTo: "/login", logout: true }; }
   },
   getIdentity: async (): Promise<CurrentUser> => {

@@ -6,7 +6,7 @@ using Synapse.Blocks.Api.Data;
 
 namespace Synapse.Blocks.Api.Auth;
 
-public sealed class InvitationService(AppDbContext db, UserManager<ApplicationUser> users)
+public sealed class InvitationService(AppDbContext db, UserManager<ApplicationUser> users, PlatformAuditEventService audit)
 {
     public async Task<string> CreateAsync(string email, DateTimeOffset expiresAt, string invitedByUserId, CancellationToken cancellationToken = default)
     {
@@ -19,23 +19,47 @@ public sealed class InvitationService(AppDbContext db, UserManager<ApplicationUs
         return token;
     }
 
-    public async Task<bool> AcceptAsync(string token, string password, CancellationToken cancellationToken = default)
+    public async Task<bool> AcceptAsync(
+        string token,
+        string password,
+        string firstName,
+        string lastName,
+        string? teacherDescription,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(password)) return false;
+        if (string.IsNullOrWhiteSpace(token)
+            || string.IsNullOrWhiteSpace(password)
+            || string.IsNullOrWhiteSpace(firstName)
+            || string.IsNullOrWhiteSpace(lastName)
+            || firstName.Trim().Length > 100
+            || lastName.Trim().Length > 100
+            || teacherDescription?.Trim().Length is > 1000)
+            return false;
         var hash = Hash(token);
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
         var invitation = await db.Invitations.SingleOrDefaultAsync(item => item.TokenHash == hash, cancellationToken);
         if (invitation is null || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(invitation.TokenHash), Convert.FromHexString(hash))
-            || invitation.ConsumedAt is not null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
+            || invitation.ConsumedAt is not null || invitation.RevokedAt is not null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
             return false;
 
-        var user = new ApplicationUser { UserName = invitation.Email, Email = invitation.Email, DisplayName = invitation.Email };
+        var normalizedFirstName = firstName.Trim();
+        var normalizedLastName = lastName.Trim();
+        var user = new ApplicationUser
+        {
+            UserName = invitation.Email,
+            Email = invitation.Email,
+            FirstName = normalizedFirstName,
+            LastName = normalizedLastName,
+            TeacherDescription = string.IsNullOrWhiteSpace(teacherDescription) ? null : teacherDescription.Trim(),
+            DisplayName = $"{normalizedFirstName} {normalizedLastName}"
+        };
         var created = await users.CreateAsync(user, password);
         if (!created.Succeeded) return false;
         var assigned = await users.AddToRoleAsync(user, BootstrapPlatformAdmin.TeacherRole);
         if (!assigned.Succeeded) throw new InvalidOperationException("Unable to assign teacher role.");
         invitation.ConsumedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        await audit.RecordAsync(user.Id, "teacher.invitation.accepted", "teacher", user.Id, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

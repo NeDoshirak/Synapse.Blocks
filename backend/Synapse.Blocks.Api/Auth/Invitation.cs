@@ -8,4 +8,5 @@ public sealed class Invitation
     public string InvitedByUserId { get; set; } = "";
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? ConsumedAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
 }

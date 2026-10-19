@@ -1,6 +1,9 @@
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Synapse.Blocks.Api.Auth;
 using Synapse.Blocks.Api.Cases;
@@ -27,6 +30,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
+builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.Name = "synapse.teacher";
@@ -46,7 +50,24 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+    options.AddPolicy("ActiveMfa", policy => policy
+        .RequireAuthenticatedUser()
+        .AddRequirements(new ActiveMfaRequirement())));
+builder.Services.AddScoped<IAuthorizationHandler, ActiveMfaHandler>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth-attempts", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddAntiforgery(options =>
@@ -58,9 +79,13 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = secureCookies ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
 });
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<PlatformAuditEventService>();
+builder.Services.AddScoped<TeacherAccountService>();
+builder.Services.AddScoped<AuthenticatorService>();
 builder.Services.AddSingleton<LevelDefinitionValidator>();
 builder.Services.AddScoped<LevelService>();
 builder.Services.AddScoped<CaseService>();
+builder.Services.AddScoped<PlatformCaseService>();
 builder.Services.AddScoped<ShareLinkService>();
 builder.Services.AddScoped<AttemptService>();
 builder.Services.AddScoped<ProgramEvaluationService>();
@@ -73,6 +98,8 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseMigrationHealthCheck>("migrations");
 
 var app = builder.Build();
+app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
@@ -85,6 +112,7 @@ app.MapAuthEndpoints();
 app.MapPlatformAdminEndpoints();
 app.MapTeacherLevelEndpoints();
 app.MapTeacherCaseEndpoints();
+app.MapPlatformCaseEndpoints();
 app.MapStudentCaseEndpoints();
 app.MapStudentAttemptEndpoints();
 app.MapTeacherReportEndpoints();
