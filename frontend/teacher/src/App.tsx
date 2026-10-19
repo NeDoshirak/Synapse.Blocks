@@ -39,17 +39,35 @@ function WorkspaceSidebar({ identity }: { identity: CurrentUser }) {
   const { mutate: logout, isPending } = useLogout();
   const isPlatformAdmin = identity.roles.includes("PlatformAdmin");
   const items = isPlatformAdmin ? [
-    { key: "/platform/teachers", icon: <TeamOutlined />, label: "Преподаватели" },
-    { key: "/platform/cases", icon: <QrcodeOutlined />, label: "Наборы" },
-    { key: "/platform/dashboard", icon: <AppstoreOutlined />, label: "Обзор" },
-    { key: "/security", icon: <SafetyCertificateOutlined />, label: "Безопасность" },
+    {
+      key: "teaching",
+      type: "group" as const,
+      label: "МОЁ ПРЕПОДАВАНИЕ",
+      children: [
+        { key: "/teaching", icon: <AppstoreOutlined />, label: "Мой кабинет" },
+        { key: "/levels", icon: <BookOutlined />, label: "Мои уровни" },
+        { key: "/cases", icon: <QrcodeOutlined />, label: "Мои наборы" },
+      ],
+    },
+    {
+      key: "platform",
+      type: "group" as const,
+      label: "УПРАВЛЕНИЕ ПЛАТФОРМОЙ",
+      children: [
+        { key: "/platform/teachers", icon: <TeamOutlined />, label: "Преподаватели" },
+        { key: "/platform/cases", icon: <QrcodeOutlined />, label: "Все наборы" },
+        { key: "/platform/dashboard", icon: <AppstoreOutlined />, label: "Обзор платформы" },
+        { key: "/security", icon: <SafetyCertificateOutlined />, label: "Безопасность" },
+      ],
+    },
   ] : [
     { key: "/", icon: <AppstoreOutlined />, label: "Обзор" },
     { key: "/levels", icon: <BookOutlined />, label: "Уровни" },
     { key: "/cases", icon: <QrcodeOutlined />, label: "Мои наборы" },
     { key: "/security", icon: <SafetyCertificateOutlined />, label: "Безопасность" },
   ];
-  const selected = items.find(item => location.pathname === item.key || (item.key !== "/" && location.pathname.startsWith(`${item.key}/`)))?.key;
+  const selected = ["/teaching", "/levels", "/cases", "/platform/teachers", "/platform/cases", "/platform/dashboard", "/security", "/"]
+    .find(key => location.pathname === key || (key !== "/" && location.pathname.startsWith(`${key}/`)));
   const name = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.displayName || identity.email;
   return <Layout.Sider className="admin-sider" width={252} breakpoint="lg" collapsedWidth={0}>
     <Link className="sidebar-brand" to={isPlatformAdmin ? "/platform/teachers" : "/"}><span className="brand-mark">ФК</span><span><strong>ФВС/Код</strong><small>учебная платформа</small></span></Link>
@@ -69,7 +87,8 @@ function WorkspaceLayout() {
 function RequireRole({ role, children }: { role: "Teacher" | "PlatformAdmin"; children: ReactNode }) {
   const { data: identity, isLoading } = useGetIdentity<CurrentUser>();
   if (isLoading) return <div className="workspace-loading"><Spin /></div>;
-  if (!identity?.roles.includes(role)) return <Navigate to={identity?.roles.includes("PlatformAdmin") ? "/platform/teachers" : "/"} replace />;
+  const canAccess = identity?.roles.includes(role) || (role === "Teacher" && identity?.roles.includes("PlatformAdmin"));
+  if (!canAccess) return <Navigate to={identity?.roles.includes("PlatformAdmin") ? "/platform/teachers" : "/"} replace />;
   return children;
 }
 
@@ -108,6 +127,7 @@ export default function App() {
       <Route path="/password-reset" element={<PasswordResetPage />} />
       <Route element={<Authenticated key="private" fallback={<AuthFallback />}><WorkspaceLayout /></Authenticated>}>
         <Route index element={<RoleHome />} />
+        <Route path="teaching" element={<RequireRole role="Teacher"><Dashboard /></RequireRole>} />
         <Route path="security" element={<SecuritySettingsPage />} />
         <Route path="levels" element={<RequireRole role="Teacher"><LevelsList /></RequireRole>} />
         <Route path="levels/create" element={<RequireRole role="Teacher"><LevelEdit create /></RequireRole>} />
