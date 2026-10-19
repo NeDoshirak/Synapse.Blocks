@@ -80,12 +80,13 @@ public sealed class CaseService(AppDbContext db)
         entity.CaseType = OrderedLevels;
         entity.ProgressionMode = request.ProgressionMode;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
-        foreach (var section in BuildSections(caseId, sections))
+        var replacementSections = BuildSections(caseId, sections);
+        foreach (var section in replacementSections)
         {
             section.Case = entity;
-            entity.Sections.Add(section);
             foreach (var content in section.Items) content.Case = entity;
         }
+        db.CaseSections.AddRange(replacementSections);
 
         await db.SaveChangesAsync(cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
