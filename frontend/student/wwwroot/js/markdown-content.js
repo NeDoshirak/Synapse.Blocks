@@ -1,5 +1,6 @@
 export async function enhanceMarkdown(root) {
-    const hasMath = root.querySelector(".math, .math-inline, .math-display");
+    const hasMath = root.querySelector(".math, .math-inline, .math-display")
+        || /\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]/.test(root.textContent ?? "");
     const hasDiagram = root.querySelector("pre > code.language-mermaid, .mermaid");
     if (!hasMath && !hasDiagram) return;
     const renderer = await import("../lib/markdown/markdown-renderer.js");

@@ -15,6 +15,47 @@ function ensureStylesheet() {
     stylesheetLoaded = true;
 }
 
+function wrapDelimitedMath(root) {
+    const displayExpression = /^\s*\\\[([\s\S]+?)\\\]\s*$/;
+    for (const paragraph of root.querySelectorAll("p")) {
+        if (paragraph.children.length !== 0) continue;
+        const match = (paragraph.textContent ?? "").match(displayExpression);
+        if (!match) continue;
+
+        const display = document.createElement("div");
+        display.className = "math math-display";
+        display.textContent = match[1].trim();
+        paragraph.replaceWith(display);
+    }
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (!/\\\([\s\S]+?\\\)/.test(node.textContent ?? "")) continue;
+        if (node.parentElement?.closest("pre, code, a, script, style, .katex, .mermaid, .math")) continue;
+        textNodes.push(node);
+    }
+
+    const inlineExpression = /\\\(([\s\S]+?)\\\)/g;
+    for (const node of textNodes) {
+        const source = node.textContent ?? "";
+        const fragment = document.createDocumentFragment();
+        let cursor = 0;
+        for (const match of source.matchAll(inlineExpression)) {
+            const index = match.index ?? 0;
+            fragment.append(document.createTextNode(source.slice(cursor, index)));
+            const math = document.createElement("span");
+            math.className = "math math-inline";
+            math.textContent = match[1].trim();
+            fragment.append(math);
+            cursor = index + match[0].length;
+        }
+        fragment.append(document.createTextNode(source.slice(cursor)));
+        node.replaceWith(fragment);
+    }
+}
+
 function renderMath(root) {
     for (const math of root.querySelectorAll(".math:not([data-enhanced]), .math-inline:not([data-enhanced]), .math-display:not([data-enhanced])")) {
         let source = (math.textContent ?? "").trim();
@@ -39,6 +80,7 @@ function renderMath(root) {
 
 export async function enhanceMarkdown(root) {
     ensureStylesheet();
+    wrapDelimitedMath(root);
     for (const code of root.querySelectorAll("pre > code.language-mermaid")) {
         const diagram = document.createElement("div");
         diagram.className = "mermaid";
